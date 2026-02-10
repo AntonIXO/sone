@@ -101,21 +101,21 @@ export default function Home() {
           <h1 className="text-[32px] font-bold text-white mb-6 tracking-tight">
             {greeting}
           </h1>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {/* Loved Tracks - always first */}
             <div
               onClick={navigateToFavorites}
-              className="flex items-center bg-[#2a2a2a]/40 hover:bg-[#2a2a2a] rounded-[4px] overflow-hidden cursor-pointer group transition-all duration-300 h-[64px] shadow-sm hover:shadow-md"
+              className="flex items-center bg-[#2a2a2a]/40 hover:bg-[#2a2a2a] rounded-[4px] overflow-hidden cursor-pointer group transition-all duration-300 h-[56px] shadow-sm hover:shadow-md"
             >
-              <div className="w-[64px] h-[64px] flex-shrink-0 bg-gradient-to-br from-[#450af5] via-[#8e2de2] to-[#00d2ff] shadow-lg flex items-center justify-center">
-                <Heart size={24} className="text-white" fill="white" />
+              <div className="w-[56px] h-[56px] flex-shrink-0 bg-gradient-to-br from-[#450af5] via-[#8e2de2] to-[#00d2ff] shadow-lg flex items-center justify-center">
+                <Heart size={22} className="text-white" fill="white" />
               </div>
-              <div className="flex-1 flex items-center justify-between px-4 min-w-0">
-                <span className="font-bold text-[14px] text-white truncate pr-2">
+              <div className="flex-1 flex items-center justify-between px-3 min-w-0">
+                <span className="font-bold text-[13px] text-white truncate pr-2">
                   Loved Tracks
                 </span>
-                <div className="w-10 h-10 bg-[#00FFFF] rounded-full flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 transform scale-90 group-hover:scale-100">
-                  <Play size={20} fill="black" className="text-black ml-1" />
+                <div className="w-9 h-9 bg-[#00FFFF] rounded-full flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 transform scale-90 group-hover:scale-100 flex-shrink-0">
+                  <Play size={18} fill="black" className="text-black ml-0.5" />
                 </div>
               </div>
             </div>
@@ -123,9 +123,9 @@ export default function Home() {
               <div
                 key={playlist.uuid}
                 onClick={() => handleOpenPlaylist(playlist)}
-                className="flex items-center bg-[#2a2a2a]/40 hover:bg-[#2a2a2a] rounded-[4px] overflow-hidden cursor-pointer group transition-all duration-300 h-[64px] shadow-sm hover:shadow-md"
+                className="flex items-center bg-[#2a2a2a]/40 hover:bg-[#2a2a2a] rounded-[4px] overflow-hidden cursor-pointer group transition-all duration-300 h-[56px] shadow-sm hover:shadow-md"
               >
-                <div className="w-[64px] h-[64px] flex-shrink-0 bg-[#282828] shadow-lg">
+                <div className="w-[56px] h-[56px] flex-shrink-0 bg-[#282828] shadow-lg">
                   <TidalImage
                     src={getTidalImageUrl(playlist.image, 160)}
                     alt={playlist.title}
@@ -133,12 +133,16 @@ export default function Home() {
                     className="w-full h-full"
                   />
                 </div>
-                <div className="flex-1 flex items-center justify-between px-4 min-w-0">
-                  <span className="font-bold text-[14px] text-white truncate pr-2">
+                <div className="flex-1 flex items-center justify-between px-3 min-w-0">
+                  <span className="font-bold text-[13px] text-white truncate pr-2">
                     {playlist.title}
                   </span>
-                  <div className="w-10 h-10 bg-[#00FFFF] rounded-full flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 transform scale-90 group-hover:scale-100">
-                    <Play size={20} fill="black" className="text-black ml-1" />
+                  <div className="w-9 h-9 bg-[#00FFFF] rounded-full flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 transform scale-90 group-hover:scale-100 flex-shrink-0">
+                    <Play
+                      size={18}
+                      fill="black"
+                      className="text-black ml-0.5"
+                    />
                   </div>
                 </div>
               </div>
@@ -157,7 +161,7 @@ export default function Home() {
                 Show all
               </button>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
               {featuredTracks.map((track, index) => (
                 <div
                   key={track.id}
@@ -216,7 +220,7 @@ export default function Home() {
               Show all
             </button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
             {userPlaylists.slice(0, 16).map((playlist) => (
               <div
                 key={playlist.uuid}
