@@ -114,6 +114,7 @@ export function useAudio() {
   const [history, setHistory] = useState<Track[]>([]);
   const currentTrackRef = useRef<Track | null>(null);
   const hasRestoredPlaybackRef = useRef(false);
+  const volumePersistReady = useRef(false);
 
   // Keep ref in sync so callbacks always see latest value
   useEffect(() => {
@@ -122,39 +123,40 @@ export function useAudio() {
 
   // Restore last playback session (track + queue + history + volume)
   useEffect(() => {
+    let restoredVolume: number | null = null;
+
     try {
       const raw = localStorage.getItem(PLAYBACK_STATE_KEY);
-      if (!raw) {
-        return;
-      }
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<PlaybackSnapshot>;
 
-      const parsed = JSON.parse(raw) as Partial<PlaybackSnapshot>;
+        if (parsed.currentTrack && typeof parsed.currentTrack.id === "number") {
+          setCurrentTrack(parsed.currentTrack as Track);
+        }
 
-      if (parsed.currentTrack && typeof parsed.currentTrack.id === "number") {
-        setCurrentTrack(parsed.currentTrack as Track);
-      }
+        if (Array.isArray(parsed.queue)) {
+          setQueue(
+            parsed.queue.filter(
+              (track): track is Track => !!track && typeof track.id === "number"
+            )
+          );
+        }
 
-      if (Array.isArray(parsed.queue)) {
-        setQueue(
-          parsed.queue.filter(
-            (track): track is Track => !!track && typeof track.id === "number"
-          )
-        );
-      }
+        if (Array.isArray(parsed.history)) {
+          setHistory(
+            parsed.history.filter(
+              (track): track is Track => !!track && typeof track.id === "number"
+            )
+          );
+        }
 
-      if (Array.isArray(parsed.history)) {
-        setHistory(
-          parsed.history.filter(
-            (track): track is Track => !!track && typeof track.id === "number"
-          )
-        );
-      }
-
-      // Backward compatibility: old snapshots included volume.
-      if (typeof (parsed as { volume?: number }).volume === "number") {
-        setVolumeState(
-          Math.min(1, Math.max(0, (parsed as { volume?: number }).volume!))
-        );
+        // Backward compatibility: old snapshots included volume.
+        if (typeof (parsed as { volume?: number }).volume === "number") {
+          restoredVolume = Math.min(
+            1,
+            Math.max(0, (parsed as { volume?: number }).volume!)
+          );
+        }
       }
 
       try {
@@ -162,11 +164,18 @@ export function useAudio() {
         if (rawVolume != null) {
           const parsedVolume = Number(rawVolume);
           if (!Number.isNaN(parsedVolume)) {
-            setVolumeState(Math.min(1, Math.max(0, parsedVolume)));
+            restoredVolume = Math.min(1, Math.max(0, parsedVolume));
           }
         }
       } catch (err) {
         console.error("Failed to restore volume state:", err);
+      }
+
+      if (restoredVolume != null) {
+        setVolumeState(restoredVolume);
+        invoke("set_volume", { level: restoredVolume }).catch((err) => {
+          console.error("Failed to apply restored volume:", err);
+        });
       }
     } catch (err) {
       console.error("Failed to restore playback state:", err);
@@ -282,8 +291,17 @@ export function useAudio() {
   }, [currentTrack, queue, history]);
 
   // Persist volume separately as a small scalar value.
+  // Skip the very first run after restore — at that point `volume` is still
+  // the initial default (1.0) because `setVolumeState` from the restore effect
+  // hasn't triggered a re-render yet.  Writing now would overwrite the saved
+  // value with the wrong number.
   useEffect(() => {
     if (!hasRestoredPlaybackRef.current) {
+      return;
+    }
+
+    if (!volumePersistReady.current) {
+      volumePersistReady.current = true;
       return;
     }
 
@@ -444,9 +462,11 @@ export function useAudio() {
   };
 
   const setVolume = async (level: number) => {
+    // Update UI state immediately so the slider feels responsive and so the
+    // persist effect can save the latest value even if the app closes quickly.
+    setVolumeState(level);
     try {
       await invoke("set_volume", { level });
-      setVolumeState(level);
     } catch (error) {
       console.error("Failed to set volume:", error);
     }

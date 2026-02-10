@@ -37,7 +37,6 @@ export default function PlayerBar() {
     removeFavoriteTrack,
   } = useAudioContext();
 
-  const [localVolume, setLocalVolume] = useState(volume);
   const [currentTime, setCurrentTime] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
   const [isLikeLoading, setIsLikeLoading] = useState(false);
@@ -193,13 +192,10 @@ export default function PlayerBar() {
   }, [isDragging, getTimeFromClientX, seekTo]);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(e.target.value);
-    setLocalVolume(newVolume);
-    setVolume(newVolume);
+    setVolume(parseFloat(e.target.value));
   };
 
-  const VolumeIcon =
-    localVolume === 0 ? VolumeX : localVolume < 0.5 ? Volume1 : Volume2;
+  const VolumeIcon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
 
   const getQualityBadge = () => {
     if (!currentTrack?.audioQuality) return null;
@@ -401,9 +397,7 @@ export default function PlayerBar() {
         <div className="flex items-center gap-2 group/vol w-[120px]">
           <button
             onClick={() => {
-              const newVol = localVolume > 0 ? 0 : 1;
-              setLocalVolume(newVol);
-              setVolume(newVol);
+              setVolume(volume > 0 ? 0 : 1);
             }}
             className="text-[#b3b3b3] hover:text-white transition-colors duration-150 flex-shrink-0"
           >
@@ -415,7 +409,7 @@ export default function PlayerBar() {
               min="0"
               max="1"
               step="0.01"
-              value={localVolume}
+              value={volume}
               onChange={handleVolumeChange}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             />
@@ -423,11 +417,11 @@ export default function PlayerBar() {
               <div className="absolute inset-0 bg-white/[0.12] rounded-full" />
               <div
                 className="absolute h-full bg-white/70 group-hover/vol:bg-[#00ffff] rounded-full transition-colors duration-100"
-                style={{ width: `${localVolume * 100}%` }}
+                style={{ width: `${volume * 100}%` }}
               />
               <div
                 className="absolute top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-white rounded-full shadow-sm opacity-0 group-hover/vol:opacity-100 transition-opacity duration-100"
-                style={{ left: `calc(${localVolume * 100}% - 5px)` }}
+                style={{ left: `calc(${volume * 100}% - 5px)` }}
               />
             </div>
           </div>
