@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub struct AudioPlayer {
     pipeline: gst::Element,
     eos: Arc<AtomicBool>,
+    has_uri: AtomicBool,
 }
 
 impl AudioPlayer {
@@ -40,7 +41,11 @@ impl AudioPlayer {
             }
         });
 
-        Self { pipeline, eos }
+        Self {
+            pipeline,
+            eos,
+            has_uri: AtomicBool::new(false),
+        }
     }
 
     pub fn play_url(&self, uri: &str) -> Result<(), String> {
@@ -49,6 +54,7 @@ impl AudioPlayer {
             .map_err(|e| format!("Failed to reset pipeline: {}", e))?;
 
         self.eos.store(false, Ordering::SeqCst);
+        self.has_uri.store(true, Ordering::SeqCst);
         self.pipeline.set_property("uri", uri);
 
         self.pipeline
@@ -77,6 +83,7 @@ impl AudioPlayer {
             .set_state(gst::State::Null)
             .map_err(|e| format!("Failed to stop: {}", e))?;
         self.eos.store(false, Ordering::SeqCst);
+        self.has_uri.store(false, Ordering::SeqCst);
         Ok(())
     }
 
@@ -102,7 +109,7 @@ impl AudioPlayer {
     }
 
     pub fn is_finished(&self) -> Result<bool, String> {
-        Ok(self.eos.load(Ordering::SeqCst))
+        Ok(self.eos.load(Ordering::SeqCst) || !self.has_uri.load(Ordering::SeqCst))
     }
 }
 
