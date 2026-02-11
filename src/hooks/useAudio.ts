@@ -164,6 +164,23 @@ export function useAudio() {
     currentTrackRef.current = currentTrack;
   }, [currentTrack]);
 
+  // Handle browser history navigation (back/forward buttons)
+  useEffect(() => {
+    // Set initial state if not present
+    if (!window.history.state) {
+      window.history.replaceState({ type: "home" }, "");
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state) {
+        setCurrentView(event.state);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   // Restore last playback session (track + queue + history + volume)
   useEffect(() => {
     let restoredVolume: number | null = null;
@@ -636,7 +653,9 @@ export function useAudio() {
     albumId: number,
     albumInfo?: { title: string; cover?: string; artistName?: string }
   ) => {
-    setCurrentView({ type: "album", albumId, albumInfo });
+    const view: AppView = { type: "album", albumId, albumInfo };
+    window.history.pushState(view, "");
+    setCurrentView(view);
   };
 
   const navigateToPlaylist = (
@@ -649,7 +668,9 @@ export function useAudio() {
       numberOfTracks?: number;
     }
   ) => {
-    setCurrentView({ type: "playlist", playlistId, playlistInfo });
+    const view: AppView = { type: "playlist", playlistId, playlistInfo };
+    window.history.pushState(view, "");
+    setCurrentView(view);
   };
 
   const getFavoriteTracks = useCallback(
@@ -751,15 +772,21 @@ export function useAudio() {
   };
 
   const navigateToFavorites = () => {
-    setCurrentView({ type: "favorites" });
+    const view: AppView = { type: "favorites" };
+    window.history.pushState(view, "");
+    setCurrentView(view);
   };
 
   const navigateHome = () => {
-    setCurrentView({ type: "home" });
+    const view: AppView = { type: "home" };
+    window.history.pushState(view, "");
+    setCurrentView(view);
   };
 
   const navigateToSearch = (query: string) => {
-    setCurrentView({ type: "search", query });
+    const view: AppView = { type: "search", query };
+    window.history.pushState(view, "");
+    setCurrentView(view);
   };
 
   const searchTidal = useCallback(

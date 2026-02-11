@@ -1,4 +1,4 @@
-import { ChevronLeft, Play, Pause, Clock, Music } from "lucide-react";
+import { Play, Pause, Clock, Music } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
 import { getTidalImageUrl, type Track } from "../hooks/useAudio";
@@ -117,7 +117,7 @@ export default function PlaylistView({
 
   if (loading) {
     return (
-      <div className="flex-1 bg-gradient-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
+      <div className="flex-1 bg-linear-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-2 border-[#00FFFF] border-t-transparent rounded-full animate-spin" />
           <p className="text-[#a6a6a6] text-sm">Loading playlist...</p>
@@ -128,7 +128,7 @@ export default function PlaylistView({
 
   if (error) {
     return (
-      <div className="flex-1 bg-gradient-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
+      <div className="flex-1 bg-linear-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center px-8">
           <Music size={48} className="text-[#535353]" />
           <p className="text-white font-semibold text-lg">
@@ -147,18 +147,9 @@ export default function PlaylistView({
   }
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[#1a1a1a] to-[#121212] overflow-y-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
-      <div className="sticky top-0 z-20 px-6 py-4 flex items-center bg-[#121212]">
-        <button
-          onClick={onBack}
-          className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[#a6a6a6] hover:text-white transition-colors"
-        >
-          <ChevronLeft size={20} />
-        </button>
-      </div>
-
-      <div className="px-8 pb-8 flex items-end gap-7">
-        <div className="w-[232px] h-[232px] flex-shrink-0 rounded-lg overflow-hidden shadow-2xl bg-[#282828] flex items-center justify-center">
+    <div className="flex-1 bg-linear-to-b from-[#1a1a1a] to-[#121212] overflow-y-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
+      <div className="px-8 pb-8 pt-8 flex items-end gap-7">
+        <div className="w-[232px] h-[232px] shrink-0 rounded-lg overflow-hidden shadow-2xl bg-[#282828] flex items-center justify-center">
           {playlistInfo?.image ? (
             <TidalImage
               src={getTidalImageUrl(playlistInfo.image, 640)}
@@ -254,7 +245,7 @@ export default function PlaylistView({
                 </div>
 
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="relative w-10 h-10 flex-shrink-0 rounded bg-[#282828] overflow-hidden">
+                  <div className="relative w-10 h-10 shrink-0 rounded bg-[#282828] overflow-hidden">
                     <TidalImage
                       src={getTidalImageUrl(track.album?.cover, 160)}
                       alt={track.album?.title || track.title}

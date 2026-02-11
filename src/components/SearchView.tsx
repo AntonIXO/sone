@@ -1,4 +1,4 @@
-import { ChevronLeft, Play, Clock, Music, Loader2, Search } from "lucide-react";
+import { Play, Clock, Music, Loader2, Search } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
 import {
@@ -76,7 +76,7 @@ export default function SearchView({ query, onBack }: SearchViewProps) {
 
   if (loading) {
     return (
-      <div className="flex-1 bg-gradient-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
+      <div className="flex-1 bg-linear-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 size={28} className="animate-spin text-[#00FFFF]" />
           <p className="text-[#a6a6a6] text-sm">Searching for "{query}"...</p>
@@ -87,7 +87,7 @@ export default function SearchView({ query, onBack }: SearchViewProps) {
 
   if (error) {
     return (
-      <div className="flex-1 bg-gradient-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
+      <div className="flex-1 bg-linear-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center px-8">
           <Search size={48} className="text-[#535353]" />
           <p className="text-white font-semibold text-lg">Search failed</p>
@@ -111,114 +111,106 @@ export default function SearchView({ query, onBack }: SearchViewProps) {
     results.playlists.length === 0;
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[#1a1a1a] to-[#121212] overflow-y-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
-      {/* Top Bar */}
-      <div className="sticky top-0 z-20 px-6 py-4 flex items-center gap-4 bg-[#121212]">
-        <button
-          onClick={onBack}
-          className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[#a6a6a6] hover:text-white transition-colors"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <h1 className="text-[18px] font-bold text-white truncate">
-          Results for "{query}"
-        </h1>
-      </div>
-
-      {/* Tab bar */}
-      <div className="px-6 pb-4 flex items-center gap-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors duration-150 ${
-              activeTab === tab.id
-                ? "bg-white text-black"
-                : "bg-white/[0.07] text-[#e0e0e0] hover:bg-white/[0.12]"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {noResults && (
-        <div className="flex flex-col items-center justify-center py-20 text-[#535353]">
-          <Search size={48} className="mb-4" />
-          <p className="text-white font-semibold text-lg mb-1">
-            No results found
-          </p>
-          <p className="text-sm">Try a different search term</p>
+    <div className="flex-1 bg-linear-to-b from-[#1a1a1a] to-[#121212] min-h-full">
+      <div className="px-6 py-6">
+        {/* Tab bar */}
+        <div className="pb-6 flex items-center gap-2">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors duration-150 ${
+                activeTab === tab.id
+                  ? "bg-white text-black"
+                  : "bg-white/7 text-[#e0e0e0] hover:bg-white/12"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-      )}
 
-      {results && !noResults && (
-        <div className="px-6 pb-8">
-          {/* Top Results */}
-          {activeTab === "top" && (
-            <div className="flex flex-col gap-8">
-              {results.tracks.length > 0 && (
-                <section>
-                  <h2 className="text-[16px] font-bold text-white mb-3">
-                    Tracks
-                  </h2>
-                  <TrackList
-                    tracks={results.tracks.slice(0, 8)}
-                    currentTrack={currentTrack}
-                    isPlaying={isPlaying}
-                    onPlay={handlePlayTrack}
-                  />
-                </section>
-              )}
-              {results.albums.length > 0 && (
-                <section>
-                  <h2 className="text-[16px] font-bold text-white mb-3">
-                    Albums
-                  </h2>
-                  <AlbumGrid
-                    albums={results.albums.slice(0, 6)}
-                    onAlbumClick={navigateToAlbum}
-                  />
-                </section>
-              )}
-              {results.playlists.length > 0 && (
-                <section>
-                  <h2 className="text-[16px] font-bold text-white mb-3">
-                    Playlists
-                  </h2>
-                  <PlaylistGrid
-                    playlists={results.playlists.slice(0, 6)}
-                    onPlaylistClick={navigateToPlaylist}
-                  />
-                </section>
-              )}
-            </div>
-          )}
+        {noResults && (
+          <div className="flex flex-col items-center justify-center py-20 text-[#535353]">
+            <Search size={48} className="mb-4" />
+            <p className="text-white font-semibold text-lg mb-1">
+              No results found
+            </p>
+            <p className="text-sm">Try a different search term</p>
+          </div>
+        )}
 
-          {/* Tracks tab */}
-          {activeTab === "tracks" && results.tracks.length > 0 && (
-            <TrackList
-              tracks={results.tracks}
-              currentTrack={currentTrack}
-              isPlaying={isPlaying}
-              onPlay={handlePlayTrack}
-            />
-          )}
+        {results && !noResults && (
+          <div className="pb-8">
+            {/* Top Results */}
+            {activeTab === "top" && (
+              <div className="flex flex-col gap-8">
+                {results.tracks.length > 0 && (
+                  <section>
+                    <h2 className="text-[16px] font-bold text-white mb-3">
+                      Tracks
+                    </h2>
+                    <TrackList
+                      tracks={results.tracks.slice(0, 8)}
+                      currentTrack={currentTrack}
+                      isPlaying={isPlaying}
+                      onPlay={handlePlayTrack}
+                    />
+                  </section>
+                )}
+                {results.albums.length > 0 && (
+                  <section>
+                    <h2 className="text-[16px] font-bold text-white mb-3">
+                      Albums
+                    </h2>
+                    <AlbumGrid
+                      albums={results.albums.slice(0, 6)}
+                      onAlbumClick={navigateToAlbum}
+                    />
+                  </section>
+                )}
+                {results.playlists.length > 0 && (
+                  <section>
+                    <h2 className="text-[16px] font-bold text-white mb-3">
+                      Playlists
+                    </h2>
+                    <PlaylistGrid
+                      playlists={results.playlists.slice(0, 6)}
+                      onPlaylistClick={navigateToPlaylist}
+                    />
+                  </section>
+                )}
+              </div>
+            )}
 
-          {/* Albums tab */}
-          {activeTab === "albums" && results.albums.length > 0 && (
-            <AlbumGrid albums={results.albums} onAlbumClick={navigateToAlbum} />
-          )}
+            {/* Tracks tab */}
+            {activeTab === "tracks" && results.tracks.length > 0 && (
+              <TrackList
+                tracks={results.tracks}
+                currentTrack={currentTrack}
+                isPlaying={isPlaying}
+                onPlay={handlePlayTrack}
+              />
+            )}
 
-          {/* Playlists tab */}
-          {activeTab === "playlists" && results.playlists.length > 0 && (
-            <PlaylistGrid
-              playlists={results.playlists}
-              onPlaylistClick={navigateToPlaylist}
-            />
-          )}
-        </div>
-      )}
+            {/* Albums tab */}
+            {activeTab === "albums" && results.albums.length > 0 && (
+              <AlbumGrid
+                albums={results.albums}
+                onAlbumClick={navigateToAlbum}
+              />
+            )}
+
+            {/* Playlists tab */}
+            {activeTab === "playlists" && results.playlists.length > 0 && (
+              <PlaylistGrid
+                playlists={results.playlists}
+                onPlaylistClick={navigateToPlaylist}
+              />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

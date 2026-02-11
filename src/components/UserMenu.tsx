@@ -30,14 +30,14 @@ export default function UserMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a1a] rounded-lg shadow-2xl shadow-black/60 border border-white/[0.08] z-50 py-1 animate-fadeIn">
+        <div className="absolute right-0 top-full mt-2 w-72 bg-[#1a1a1a] rounded-lg shadow-2xl shadow-black/60 border border-white/8 z-50 py-1 animate-fadeIn">
           {/* User info */}
-          <div className="px-4 py-3 border-b border-white/[0.06]">
+          <div className="px-4 py-3 border-b border-white/6">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-[#333] flex items-center justify-center shrink-0">
                 <User size={16} className="text-[#a6a6a6]" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-white truncate">
                   {userName}
                 </p>
@@ -51,7 +51,7 @@ export default function UserMenu() {
               setOpen(false);
               logout();
             }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-red-400 hover:bg-white/[0.06] transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-red-400 hover:bg-white/6 transition-colors"
           >
             <LogOut size={16} />
             Log out

@@ -1,9 +1,8 @@
-import { Play, ChevronLeft, ChevronRight, Heart } from "lucide-react";
+import { Play, Heart } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
 import { getTidalImageUrl, type Playlist, type Track } from "../hooks/useAudio";
 import TidalImage from "./TidalImage";
-import UserMenu from "./UserMenu";
 
 export default function Home() {
   const {
@@ -66,22 +65,8 @@ export default function Home() {
   }
 
   return (
-    <div className="flex-1 bg-gradient-to-b from-[#1a1a1a] to-[#121212] overflow-y-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
-      {/* Top Bar */}
-      <div className="sticky top-0 z-20 px-6 py-4 flex items-center justify-between bg-[#121212]">
-        <div className="flex items-center gap-2">
-          <button className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[#a6a6a6] hover:text-white transition-colors disabled:opacity-50">
-            <ChevronLeft size={20} />
-          </button>
-          <button className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[#a6a6a6] hover:text-white transition-colors disabled:opacity-50">
-            <ChevronRight size={20} />
-          </button>
-        </div>
-
-        <UserMenu />
-      </div>
-
-      <div className="px-6 pb-8">
+    <div className="flex-1 bg-gradient-to-b from-[#1a1a1a] to-[#121212] min-h-full">
+      <div className="px-6 py-8">
         {/* Quick Access Grid (Hero) */}
         <section className="mb-10">
           <h1 className="text-[32px] font-bold text-white mb-6 tracking-tight">
