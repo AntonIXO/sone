@@ -4,6 +4,7 @@ import Home from "./components/Home";
 import AlbumView from "./components/AlbumView";
 import PlaylistView from "./components/PlaylistView";
 import FavoritesView from "./components/FavoritesView";
+import SearchView from "./components/SearchView";
 import Login from "./components/Login";
 import { AudioProvider, useAudioContext } from "./contexts/AudioContext";
 import "./App.css";
@@ -89,6 +90,8 @@ function AppContent() {
         );
       case "favorites":
         return <FavoritesView onBack={navigateHome} />;
+      case "search":
+        return <SearchView query={currentView.query} onBack={navigateHome} />;
       case "home":
       default:
         return <Home />;

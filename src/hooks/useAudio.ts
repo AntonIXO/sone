@@ -65,7 +65,16 @@ export type AppView =
         numberOfTracks?: number;
       };
     }
-  | { type: "favorites" };
+  | { type: "favorites" }
+  | { type: "search"; query: string };
+
+export interface SearchResults {
+  artists: { id: number; name: string }[];
+  albums: AlbumDetail[];
+  tracks: Track[];
+  playlists: Playlist[];
+  topHitType?: string;
+}
 
 export interface Playlist {
   uuid: string;
@@ -695,6 +704,22 @@ export function useAudio() {
     setCurrentView({ type: "home" });
   };
 
+  const navigateToSearch = (query: string) => {
+    setCurrentView({ type: "search", query });
+  };
+
+  const searchTidal = useCallback(
+    async (query: string, limit: number = 20): Promise<SearchResults> => {
+      try {
+        return await invoke<SearchResults>("search_tidal", { query, limit });
+      } catch (error: any) {
+        console.error("Failed to search:", error);
+        throw error;
+      }
+    },
+    []
+  );
+
   const toggleDrawer = () => {
     setDrawerOpen((prev) => !prev);
   };
@@ -879,6 +904,8 @@ export function useAudio() {
     navigateToPlaylist,
     navigateToFavorites,
     navigateHome,
+    navigateToSearch,
+    searchTidal,
     toggleDrawer,
     setDrawerOpen,
     setDrawerTab,

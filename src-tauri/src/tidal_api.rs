@@ -169,6 +169,17 @@ pub struct StreamInfo {
     pub audio_quality: Option<String>,
 }
 
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TidalSearchResults {
+    pub artists: Vec<TidalArtist>,
+    pub albums: Vec<TidalAlbumDetail>,
+    pub tracks: Vec<TidalTrack>,
+    pub playlists: Vec<TidalPlaylist>,
+    #[serde(default)]
+    pub top_hit_type: Option<String>,
+}
+
 pub struct TidalClient {
     client: Client,
     pub tokens: Option<AuthTokens>,
@@ -913,5 +924,72 @@ impl TidalClient {
         // Fallback: try parsing as a flat array
         serde_json::from_str::<Vec<TidalTrack>>(&body)
             .map_err(|e| format!("Failed to parse track radio: {} - Body: {}", e, body))
+    }
+
+    pub fn search(&self, query: &str, limit: u32) -> Result<TidalSearchResults, String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        let response = self
+            .client
+            .get(format!("{}/search", TIDAL_API_URL))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[
+                ("query", query),
+                ("countryCode", "US"),
+                ("limit", &limit.to_string()),
+                ("offset", "0"),
+                ("types", "ARTISTS,ALBUMS,TRACKS,PLAYLISTS"),
+            ])
+            .send()
+            .map_err(|e| format!("Failed to search: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(format!("Search failed ({}): {}", status, body));
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SearchSection<T> {
+            items: Vec<T>,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TopHit {
+            #[serde(rename = "type")]
+            hit_type: Option<String>,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SearchResponse {
+            #[serde(default)]
+            artists: Option<SearchSection<TidalArtist>>,
+            #[serde(default)]
+            albums: Option<SearchSection<TidalAlbumDetail>>,
+            #[serde(default)]
+            tracks: Option<SearchSection<TidalTrack>>,
+            #[serde(default)]
+            playlists: Option<SearchSection<TidalPlaylistRaw>>,
+            #[serde(default)]
+            top_hit: Option<TopHit>,
+        }
+
+        let data = serde_json::from_str::<SearchResponse>(&body)
+            .map_err(|e| format!("Failed to parse search results: {} - Body: {}", e, body))?;
+
+        Ok(TidalSearchResults {
+            artists: data.artists.map(|s| s.items).unwrap_or_default(),
+            albums: data.albums.map(|s| s.items).unwrap_or_default(),
+            tracks: data.tracks.map(|s| s.items).unwrap_or_default(),
+            playlists: data
+                .playlists
+                .map(|s| s.items.into_iter().map(|p| p.into()).collect())
+                .unwrap_or_default(),
+            top_hit_type: data.top_hit.and_then(|h| h.hit_type),
+        })
     }
 }

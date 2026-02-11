@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
-use tidal_api::{AuthTokens, DeviceCode, PaginatedTracks, StreamInfo, TidalAlbumDetail, TidalClient, TidalCredit, TidalLyrics, TidalPlaylist, TidalTrack};
+use tidal_api::{AuthTokens, DeviceCode, PaginatedTracks, StreamInfo, TidalAlbumDetail, TidalClient, TidalCredit, TidalLyrics, TidalPlaylist, TidalSearchResults, TidalTrack};
 
 
 #[tauri::command]
@@ -229,6 +229,14 @@ fn get_stream_url(state: State<AppState>, track_id: u64, quality: String) -> Res
     client.get_stream_url(track_id, &quality)
 }
 
+// ==================== Search ====================
+
+#[tauri::command(rename_all = "camelCase")]
+fn search_tidal(state: State<AppState>, query: String, limit: u32) -> Result<TidalSearchResults, String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.search(&query, limit)
+}
+
 // ==================== Track Metadata (Lyrics, Credits, Radio) ====================
 
 #[tauri::command(rename_all = "camelCase")]
@@ -345,6 +353,7 @@ pub fn run() {
             get_album_detail,
             get_album_tracks,
             get_stream_url,
+            search_tidal,
             get_track_lyrics,
             get_track_credits,
             get_track_radio,
