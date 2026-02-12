@@ -1828,6 +1828,165 @@ impl TidalClient {
         }
     }
 
+    // ==================== Artist Detail ====================
+
+    /// Fetch full artist detail (name, picture, etc.)
+    pub fn get_artist_detail(&self, artist_id: u64) -> Result<TidalArtistDetail, String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        let response = self
+            .client
+            .get(format!("{}/artists/{}", TIDAL_API_URL, artist_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[("countryCode", "US")])
+            .send()
+            .map_err(|e| format!("Failed to fetch artist detail: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(format!("Artist detail API error ({}): {}", status, body));
+        }
+
+        serde_json::from_str::<TidalArtistDetail>(&body)
+            .map_err(|e| format!("Failed to parse artist detail: {} - Body: {}", e, &body[..body.len().min(500)]))
+    }
+
+    // ==================== Mix / Radio Items ====================
+
+    /// Fetch the tracks in a mix (custom mixes, radio stations, etc.)
+    /// Tidal mixes use a string mixId like "00e4f8f7a5bd..."
+    pub fn get_mix_items(&self, mix_id: &str) -> Result<Vec<TidalTrack>, String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        let response = self
+            .client
+            .get(format!("{}/mixes/{}/items", TIDAL_API_URL, mix_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[("countryCode", "US")])
+            .send()
+            .map_err(|e| format!("Failed to fetch mix items: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(format!("Mix items API error ({}): {}", status, body));
+        }
+
+        // Response: { items: [ { item: { id, title, ... }, type: "track" } ] }
+        let json: Value = serde_json::from_str(&body)
+            .map_err(|e| format!("Failed to parse mix items: {}", e))?;
+
+        if let Some(items) = json.get("items").and_then(|i| i.as_array()) {
+            let tracks: Vec<TidalTrack> = items.iter()
+                .filter_map(|entry| {
+                    entry.get("item")
+                        .and_then(|item| serde_json::from_value::<TidalTrack>(item.clone()).ok())
+                })
+                .collect();
+            Ok(tracks)
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    // ==================== Artist Page ====================
+
+    /// Fetch an artist's top tracks
+    pub fn get_artist_top_tracks(&self, artist_id: u64, limit: u32) -> Result<Vec<TidalTrack>, String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        let response = self
+            .client
+            .get(format!("{}/artists/{}/toptracks", TIDAL_API_URL, artist_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[
+                ("countryCode", "US"),
+                ("limit", &limit.to_string()),
+                ("offset", "0"),
+            ])
+            .send()
+            .map_err(|e| format!("Failed to fetch artist top tracks: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(format!("Artist top tracks API error ({}): {}", status, body));
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ArtistTracksResponse {
+            items: Vec<TidalTrack>,
+        }
+
+        let data = serde_json::from_str::<ArtistTracksResponse>(&body)
+            .map_err(|e| format!("Failed to parse artist top tracks: {} - Body: {}", e, &body[..body.len().min(500)]))?;
+
+        Ok(data.items)
+    }
+
+    /// Fetch an artist's albums
+    pub fn get_artist_albums(&self, artist_id: u64, limit: u32) -> Result<Vec<TidalAlbumDetail>, String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        let response = self
+            .client
+            .get(format!("{}/artists/{}/albums", TIDAL_API_URL, artist_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[
+                ("countryCode", "US"),
+                ("limit", &limit.to_string()),
+                ("offset", "0"),
+            ])
+            .send()
+            .map_err(|e| format!("Failed to fetch artist albums: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(format!("Artist albums API error ({}): {}", status, body));
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct ArtistAlbumsResponse {
+            items: Vec<TidalAlbumDetail>,
+        }
+
+        let data = serde_json::from_str::<ArtistAlbumsResponse>(&body)
+            .map_err(|e| format!("Failed to parse artist albums: {} - Body: {}", e, &body[..body.len().min(500)]))?;
+
+        Ok(data.items)
+    }
+
+    /// Fetch artist bio text
+    pub fn get_artist_bio(&self, artist_id: u64) -> Result<String, String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        let response = self
+            .client
+            .get(format!("{}/artists/{}/bio", TIDAL_API_URL, artist_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[("countryCode", "US")])
+            .send()
+            .map_err(|e| format!("Failed to fetch artist bio: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Ok(String::new()); // Bio not always available
+        }
+
+        let json: Value = serde_json::from_str(&body).unwrap_or_default();
+        Ok(json.get("text").and_then(|t| t.as_str()).unwrap_or("").to_string())
+    }
+
     pub fn get_page(&self, api_path: &str) -> Result<HomePageResponse, String> {
         let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
 

@@ -71,6 +71,16 @@ export type AppView =
       type: "viewAll";
       title: string;
       apiPath: string;
+    }
+  | {
+      type: "artist";
+      artistId: number;
+      artistInfo?: { name: string; picture?: string };
+    }
+  | {
+      type: "mix";
+      mixId: string;
+      mixInfo?: { title: string; image?: string; subtitle?: string };
     };
 
 export interface SearchResults {
@@ -825,6 +835,24 @@ export function useAudio() {
     setCurrentView(view);
   };
 
+  const navigateToArtist = (
+    artistId: number,
+    artistInfo?: { name: string; picture?: string }
+  ) => {
+    const view: AppView = { type: "artist", artistId, artistInfo };
+    window.history.pushState(view, "");
+    setCurrentView(view);
+  };
+
+  const navigateToMix = (
+    mixId: string,
+    mixInfo?: { title: string; image?: string; subtitle?: string }
+  ) => {
+    const view: AppView = { type: "mix", mixId, mixInfo };
+    window.history.pushState(view, "");
+    setCurrentView(view);
+  };
+
   // ==================== Home Page API ====================
 
   const getHomePage = useCallback(async (): Promise<HomePageCached> => {
@@ -849,6 +877,41 @@ export function useAudio() {
   const getPageSection = useCallback(
     async (apiPath: string): Promise<HomePageResponse> => {
       return await invoke<HomePageResponse>("get_page_section", { apiPath });
+    },
+    []
+  );
+
+  const getMixItems = useCallback(
+    async (mixId: string): Promise<Track[]> => {
+      return await invoke<Track[]>("get_mix_items", { mixId });
+    },
+    []
+  );
+
+  const getArtistDetail = useCallback(
+    async (artistId: number): Promise<ArtistDetail> => {
+      return await invoke<ArtistDetail>("get_artist_detail", { artistId });
+    },
+    []
+  );
+
+  const getArtistTopTracks = useCallback(
+    async (artistId: number, limit: number = 20): Promise<Track[]> => {
+      return await invoke<Track[]>("get_artist_top_tracks", { artistId, limit });
+    },
+    []
+  );
+
+  const getArtistAlbums = useCallback(
+    async (artistId: number, limit: number = 20): Promise<AlbumDetail[]> => {
+      return await invoke<AlbumDetail[]>("get_artist_albums", { artistId, limit });
+    },
+    []
+  );
+
+  const getArtistBio = useCallback(
+    async (artistId: number): Promise<string> => {
+      return await invoke<string>("get_artist_bio", { artistId });
     },
     []
   );
@@ -1054,11 +1117,18 @@ export function useAudio() {
     navigateHome,
     navigateToSearch,
     navigateToViewAll,
+    navigateToArtist,
+    navigateToMix,
     searchTidal,
     getHomePage,
     refreshHomePage,
     getFavoriteArtists,
     getPageSection,
+    getMixItems,
+    getArtistDetail,
+    getArtistTopTracks,
+    getArtistAlbums,
+    getArtistBio,
     toggleDrawer,
     setDrawerOpen,
     setDrawerTab,

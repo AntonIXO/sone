@@ -6,6 +6,8 @@ import PlaylistView from "./components/PlaylistView";
 import FavoritesView from "./components/FavoritesView";
 import SearchView from "./components/SearchView";
 import ViewAllPage from "./components/ViewAllPage";
+import ArtistPage from "./components/ArtistPage";
+import MixPage from "./components/MixPage";
 import Login from "./components/Login";
 import { AudioProvider, useAudioContext } from "./contexts/AudioContext";
 import "./App.css";
@@ -98,6 +100,22 @@ function AppContent() {
           <ViewAllPage
             title={currentView.title}
             apiPath={currentView.apiPath}
+            onBack={navigateHome}
+          />
+        );
+      case "artist":
+        return (
+          <ArtistPage
+            artistId={currentView.artistId}
+            artistInfo={currentView.artistInfo}
+            onBack={navigateHome}
+          />
+        );
+      case "mix":
+        return (
+          <MixPage
+            mixId={currentView.mixId}
+            mixInfo={currentView.mixInfo}
             onBack={navigateHome}
           />
         );

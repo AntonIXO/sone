@@ -99,6 +99,8 @@ export default function HomeSection({ section }: HomeSectionProps) {
     navigateToAlbum,
     navigateToPlaylist,
     navigateToViewAll,
+    navigateToArtist,
+    navigateToMix,
     playTrack,
     setQueueTracks,
   } = useAudioContext();
@@ -133,6 +135,25 @@ export default function HomeSection({ section }: HomeSectionProps) {
       const remainingTracks = items.slice(trackIndex + 1).filter((t: any) => isTrackItem(t, section.sectionType));
       setQueueTracks(remainingTracks);
       playTrack(item);
+    } else if (isMixItem(item, section.sectionType)) {
+      // Mix or radio station - navigate to mix page
+      const mixId = item.mixId || item.id?.toString();
+      if (mixId) {
+        navigateToMix(mixId, {
+          title: getItemTitle(item),
+          image: getItemImage(item),
+          subtitle: getItemSubtitle(item),
+        });
+      }
+    } else if (isArtistItem(item, section.sectionType)) {
+      // Artist - navigate to artist page
+      const artistId = item.id;
+      if (artistId) {
+        navigateToArtist(artistId, {
+          name: item.name || getItemTitle(item),
+          picture: item.picture,
+        });
+      }
     } else if (item.uuid) {
       // Playlist
       navigateToPlaylist(item.uuid, {
@@ -142,15 +163,14 @@ export default function HomeSection({ section }: HomeSectionProps) {
         creatorName: item.creator?.name,
         numberOfTracks: item.numberOfTracks,
       });
-    } else if (item.id && !isMixItem(item, section.sectionType) && !isArtistItem(item, section.sectionType)) {
-      // Album
+    } else if (item.id) {
+      // Album (fallback for items with id that aren't mix/artist)
       navigateToAlbum(item.id, {
         title: item.title,
         cover: item.cover,
         artistName: item.artist?.name || item.artists?.[0]?.name,
       });
     }
-    // Mixes and artists: no dedicated view yet, so we don't navigate
   };
 
   const isTrackSection = section.sectionType === "TRACK_LIST";

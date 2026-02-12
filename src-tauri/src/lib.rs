@@ -464,6 +464,36 @@ fn get_page_section(state: State<AppState>, api_path: String) -> Result<HomePage
     client.get_page(&api_path)
 }
 
+#[tauri::command(rename_all = "camelCase")]
+fn get_mix_items(state: State<AppState>, mix_id: String) -> Result<Vec<TidalTrack>, String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.get_mix_items(&mix_id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn get_artist_detail(state: State<AppState>, artist_id: u64) -> Result<TidalArtistDetail, String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.get_artist_detail(artist_id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn get_artist_top_tracks(state: State<AppState>, artist_id: u64, limit: u32) -> Result<Vec<TidalTrack>, String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.get_artist_top_tracks(artist_id, limit)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn get_artist_albums(state: State<AppState>, artist_id: u64, limit: u32) -> Result<Vec<TidalAlbumDetail>, String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.get_artist_albums(artist_id, limit)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn get_artist_bio(state: State<AppState>, artist_id: u64) -> Result<String, String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.get_artist_bio(artist_id)
+}
+
 /// Debug command: returns the raw JSON structure of multiple page endpoints
 /// so we can see what format Tidal is using and what sections are available.
 #[tauri::command]
@@ -703,6 +733,11 @@ pub fn run() {
             refresh_home_page,
             get_favorite_artists,
             get_page_section,
+            get_mix_items,
+            get_artist_detail,
+            get_artist_top_tracks,
+            get_artist_albums,
+            get_artist_bio,
             debug_home_page_raw,
             play_tidal_track,
             pause_track,
