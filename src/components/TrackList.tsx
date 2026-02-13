@@ -340,7 +340,7 @@ export default function TrackList({
                 </button>
                 {playlistMenuTrackId === track.id && (
                   <AddToPlaylistMenu
-                    trackId={track.id}
+                    trackIds={[track.id]}
                     anchorRef={{ current: plusButtonRefs.current.get(track.id) ?? null }}
                     onClose={closePlaylistMenu}
                   />

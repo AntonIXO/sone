@@ -11,6 +11,7 @@ import MixPage from "./components/MixPage";
 import TrackRadioPage from "./components/TrackRadioPage";
 import Login from "./components/Login";
 import { AudioProvider, useAudioContext } from "./contexts/AudioContext";
+import { ToastProvider } from "./contexts/ToastContext";
 import "./App.css";
 
 const ZOOM_KEY = "tide-vibe.zoom.v1";
@@ -140,9 +141,18 @@ function AppContent() {
 function App() {
   useZoom();
 
+  // Disable the default browser/webview context menu globally
+  useEffect(() => {
+    const handler = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", handler);
+    return () => document.removeEventListener("contextmenu", handler);
+  }, []);
+
   return (
     <AudioProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </AudioProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { Heart, Loader2 } from "lucide-react";
+import { Heart } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
 import { type Track } from "../hooks/useAudio";
@@ -97,6 +97,7 @@ export default function FavoritesView({ onBack }: FavoritesViewProps) {
     }
   };
 
+  // !TODO: Remove this later if not used anymore
   const handlePlayAll = async () => {
     if (tracks.length === 0) return;
 
@@ -151,7 +152,6 @@ export default function FavoritesView({ onBack }: FavoritesViewProps) {
 
   return (
     <div className="flex-1 bg-linear-to-b from-[#1a1a1a] to-[#121212] overflow-y-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
-
       {/* Favorites Header */}
       <div className="px-8 pb-8 flex items-end gap-7">
         <div className="w-[232px] h-[232px] shrink-0 rounded-lg overflow-hidden shadow-2xl bg-linear-to-br from-[#450af5] via-[#8e2de2] to-[#00d2ff] flex items-center justify-center">
@@ -174,7 +174,7 @@ export default function FavoritesView({ onBack }: FavoritesViewProps) {
 
       {/* Track List */}
       <div className="px-8 pb-8">
-        <TrackList 
+        <TrackList
           tracks={tracks}
           onPlay={handlePlayTrack}
           onLoadMore={loadMore}

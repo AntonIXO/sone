@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Play, ChevronLeft, ChevronRight, User, Music } from "lucide-react";
 import { useAudioContext } from "../contexts/AudioContext";
-import { getTidalImageUrl, type HomeSection as HomeSectionType } from "../hooks/useAudio";
+import { getTidalImageUrl, type HomeSection as HomeSectionType, type MediaItemType } from "../hooks/useAudio";
+import MediaContextMenu from "./MediaContextMenu";
 
 // Helpers for extracting data from the raw JSON items
 // These handle both V1 (direct fields) and V2 (unwrapped from data.{}) formats
@@ -107,6 +108,60 @@ export default function HomeSection({ section }: HomeSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    item: MediaItemType;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, item: any) => {
+      // Build a MediaItemType from the raw item
+      let mediaItem: MediaItemType | null = null;
+
+      if (isMixItem(item, section.sectionType)) {
+        const mixId = item.mixId || item.id?.toString();
+        if (mixId) {
+          mediaItem = {
+            type: "mix",
+            mixId,
+            title: getItemTitle(item),
+            image: getItemImage(item),
+            subtitle: getItemSubtitle(item),
+          };
+        }
+      } else if (isArtistItem(item, section.sectionType)) {
+        // Artists don't get a context menu
+        return;
+      } else if (item.uuid) {
+        // Playlist
+        mediaItem = {
+          type: "playlist",
+          uuid: item.uuid,
+          title: item.title || getItemTitle(item),
+          image: item.squareImage || item.image,
+          creatorName: item.creator?.name || (item.creator?.id === 0 ? "TIDAL" : undefined),
+        };
+      } else if (item.id && !isTrackItem(item, section.sectionType)) {
+        // Album
+        mediaItem = {
+          type: "album",
+          id: item.id,
+          title: item.title || getItemTitle(item),
+          cover: item.cover,
+          artistName: item.artist?.name || item.artists?.[0]?.name,
+        };
+      }
+
+      if (mediaItem) {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu({ item: mediaItem, position: { x: e.clientX, y: e.clientY } });
+      }
+    },
+    [section.sectionType]
+  );
 
   const items = Array.isArray(section.items) ? section.items : [];
   if (items.length === 0) return null;
@@ -234,6 +289,7 @@ export default function HomeSection({ section }: HomeSectionProps) {
             <div
               key={id}
               onClick={() => handleItemClick(item)}
+              onContextMenu={(e) => handleContextMenu(e, item)}
               className="flex-shrink-0 w-[180px] p-3 bg-[#181818] hover:bg-[#282828] rounded-lg cursor-pointer group transition-[background-color] duration-300"
             >
               {/* Image */}
@@ -290,6 +346,15 @@ export default function HomeSection({ section }: HomeSectionProps) {
           );
         })}
       </div>
+
+      {/* Media context menu */}
+      {contextMenu && (
+        <MediaContextMenu
+          item={contextMenu.item}
+          cursorPosition={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </section>
   );
 }

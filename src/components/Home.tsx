@@ -1,14 +1,16 @@
 import { Play, Heart } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
 import {
   getTidalImageUrl,
   type Playlist,
   type HomeSection as HomeSectionType,
   type ArtistDetail,
+  type MediaItemType,
 } from "../hooks/useAudio";
 import TidalImage from "./TidalImage";
 import HomeSection from "./HomeSection";
+import MediaContextMenu from "./MediaContextMenu";
 
 export default function Home() {
   const {
@@ -25,6 +27,30 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [greeting, setGreeting] = useState("Good evening");
   const hasLoadedRef = useRef(false);
+
+  // Context menu state for quick-access playlist cards
+  const [contextMenu, setContextMenu] = useState<{
+    item: MediaItemType;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  const handlePlaylistContextMenu = useCallback(
+    (e: React.MouseEvent, playlist: Playlist) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        item: {
+          type: "playlist",
+          uuid: playlist.uuid,
+          title: playlist.title,
+          image: playlist.image,
+          creatorName: playlist.creator?.name || (playlist.creator?.id === 0 ? "TIDAL" : undefined),
+        },
+        position: { x: e.clientX, y: e.clientY },
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -172,6 +198,7 @@ export default function Home() {
               <div
                 key={playlist.uuid}
                 onClick={() => handleOpenPlaylist(playlist)}
+                onContextMenu={(e) => handlePlaylistContextMenu(e, playlist)}
                 className="flex items-center bg-[#2a2a2a]/40 hover:bg-[#2a2a2a] rounded-[4px] overflow-hidden cursor-pointer group transition-[background-color,box-shadow] duration-300 h-[56px] shadow-sm hover:shadow-md"
               >
                 <div className="w-[56px] h-[56px] flex-shrink-0 bg-[#282828] shadow-lg">
@@ -204,6 +231,15 @@ export default function Home() {
           <HomeSection key={`${section.title}-${idx}`} section={section} />
         ))}
       </div>
+
+      {/* Media context menu for quick-access cards */}
+      {contextMenu && (
+        <MediaContextMenu
+          item={contextMenu.item}
+          cursorPosition={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

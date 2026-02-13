@@ -1,5 +1,5 @@
 import { Play, Clock, Music, Loader2, Search } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
 import {
   getTidalImageUrl,
@@ -7,8 +7,10 @@ import {
   type Track,
   type AlbumDetail,
   type Playlist,
+  type MediaItemType,
 } from "../hooks/useAudio";
 import TidalImage from "./TidalImage";
+import MediaContextMenu from "./MediaContextMenu";
 
 type SearchTab = "top" | "tracks" | "albums" | "playlists";
 
@@ -45,6 +47,48 @@ export default function SearchView({ query, onBack }: SearchViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SearchTab>("top");
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    item: MediaItemType;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  const handleAlbumContextMenu = useCallback(
+    (e: React.MouseEvent, album: AlbumDetail) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        item: {
+          type: "album",
+          id: album.id,
+          title: album.title,
+          cover: album.cover,
+          artistName: album.artist?.name,
+        },
+        position: { x: e.clientX, y: e.clientY },
+      });
+    },
+    []
+  );
+
+  const handlePlaylistContextMenu = useCallback(
+    (e: React.MouseEvent, pl: Playlist) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        item: {
+          type: "playlist",
+          uuid: pl.uuid,
+          title: pl.title,
+          image: pl.image,
+          creatorName: pl.creator?.name || (pl.creator?.id === 0 ? "TIDAL" : undefined),
+        },
+        position: { x: e.clientX, y: e.clientY },
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     if (!query.trim()) return;
@@ -166,6 +210,7 @@ export default function SearchView({ query, onBack }: SearchViewProps) {
                     <AlbumGrid
                       albums={results.albums.slice(0, 6)}
                       onAlbumClick={navigateToAlbum}
+                      onContextMenu={handleAlbumContextMenu}
                     />
                   </section>
                 )}
@@ -177,6 +222,7 @@ export default function SearchView({ query, onBack }: SearchViewProps) {
                     <PlaylistGrid
                       playlists={results.playlists.slice(0, 6)}
                       onPlaylistClick={navigateToPlaylist}
+                      onContextMenu={handlePlaylistContextMenu}
                     />
                   </section>
                 )}
@@ -198,6 +244,7 @@ export default function SearchView({ query, onBack }: SearchViewProps) {
               <AlbumGrid
                 albums={results.albums}
                 onAlbumClick={navigateToAlbum}
+                onContextMenu={handleAlbumContextMenu}
               />
             )}
 
@@ -206,9 +253,19 @@ export default function SearchView({ query, onBack }: SearchViewProps) {
               <PlaylistGrid
                 playlists={results.playlists}
                 onPlaylistClick={navigateToPlaylist}
+                onContextMenu={handlePlaylistContextMenu}
               />
             )}
           </div>
+        )}
+
+        {/* Media context menu */}
+        {contextMenu && (
+          <MediaContextMenu
+            item={contextMenu.item}
+            cursorPosition={contextMenu.position}
+            onClose={() => setContextMenu(null)}
+          />
         )}
       </div>
     </div>
@@ -320,12 +377,14 @@ function TrackList({
 function AlbumGrid({
   albums,
   onAlbumClick,
+  onContextMenu,
 }: {
   albums: AlbumDetail[];
   onAlbumClick: (
     id: number,
     info?: { title: string; cover?: string; artistName?: string }
   ) => void;
+  onContextMenu?: (e: React.MouseEvent, album: AlbumDetail) => void;
 }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
@@ -339,6 +398,7 @@ function AlbumGrid({
               artistName: album.artist?.name,
             })
           }
+          onContextMenu={onContextMenu ? (e) => onContextMenu(e, album) : undefined}
           className="p-3 bg-[#181818] hover:bg-[#282828] rounded-md cursor-pointer group transition-[background-color] duration-300"
         >
           <div className="aspect-square w-full rounded-md mb-3 relative overflow-hidden shadow-lg bg-[#282828]">
@@ -370,6 +430,7 @@ function AlbumGrid({
 function PlaylistGrid({
   playlists,
   onPlaylistClick,
+  onContextMenu,
 }: {
   playlists: Playlist[];
   onPlaylistClick: (
@@ -382,6 +443,7 @@ function PlaylistGrid({
       numberOfTracks?: number;
     }
   ) => void;
+  onContextMenu?: (e: React.MouseEvent, playlist: Playlist) => void;
 }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
@@ -397,6 +459,7 @@ function PlaylistGrid({
               numberOfTracks: pl.numberOfTracks,
             })
           }
+          onContextMenu={onContextMenu ? (e) => onContextMenu(e, pl) : undefined}
           className="p-3 bg-[#181818] hover:bg-[#282828] rounded-md cursor-pointer group transition-[background-color] duration-300"
         >
           <div className="aspect-square w-full rounded-md mb-3 relative overflow-hidden shadow-lg bg-[#282828]">

@@ -13,7 +13,6 @@ export default function Header() {
     navigateToSearch,
     searchTidal,
     currentView,
-    navigateHome,
   } = useAudioContext();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -117,14 +116,14 @@ export default function Header() {
       <div className="flex items-center gap-4 flex-1 min-w-0">
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => window.history.back()} 
+            onClick={() => window.history.back()}
             className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[#a6a6a6] hover:text-white transition-colors disabled:opacity-50"
           >
             <ChevronLeft size={20} />
           </button>
           <button
-             onClick={() => window.history.forward()}
-             className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[#a6a6a6] hover:text-white transition-colors disabled:opacity-50"
+            onClick={() => window.history.forward()}
+            className="w-8 h-8 rounded-full bg-black/40 flex items-center justify-center text-[#a6a6a6] hover:text-white transition-colors disabled:opacity-50"
           >
             <ChevronRight size={20} />
           </button>

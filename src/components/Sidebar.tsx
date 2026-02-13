@@ -5,9 +5,10 @@ import {
   Heart,
 } from "lucide-react";
 import { useAudioContext } from "../contexts/AudioContext";
-import { getTidalImageUrl } from "../hooks/useAudio";
+import { getTidalImageUrl, type MediaItemType } from "../hooks/useAudio";
 import TidalImage from "./TidalImage";
-import { useState, useMemo } from "react";
+import MediaContextMenu from "./MediaContextMenu";
+import { useState, useMemo, useCallback } from "react";
 
 export default function Sidebar() {
   const {
@@ -20,6 +21,30 @@ export default function Sidebar() {
     currentView,
   } = useAudioContext();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    item: MediaItemType;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  const handlePlaylistContextMenu = useCallback(
+    (e: React.MouseEvent, playlist: (typeof allPlaylists)[number]) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        item: {
+          type: "playlist",
+          uuid: playlist.uuid,
+          title: playlist.title,
+          image: playlist.image,
+          creatorName: playlist.creator?.name || (playlist.creator?.id === 0 ? "TIDAL" : undefined),
+        },
+        position: { x: e.clientX, y: e.clientY },
+      });
+    },
+    []
+  );
 
   const userId = authTokens?.user_id;
 
@@ -202,6 +227,7 @@ export default function Sidebar() {
                   <button
                     key={playlist.uuid}
                     onClick={() => handlePlaylistClick(playlist)}
+                    onContextMenu={(e) => handlePlaylistContextMenu(e, playlist)}
                     className={`w-full flex items-center gap-2.5 px-1.5 py-2 rounded-md transition-colors duration-150 group ${
                       currentView.type === "playlist" &&
                       currentView.playlistId === playlist.uuid
@@ -239,6 +265,15 @@ export default function Sidebar() {
           )}
         </div>
       </div>
+
+      {/* Media context menu */}
+      {contextMenu && (
+        <MediaContextMenu
+          item={contextMenu.item}
+          cursorPosition={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

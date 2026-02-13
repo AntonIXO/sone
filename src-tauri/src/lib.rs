@@ -390,6 +390,24 @@ fn remove_favorite_album(state: State<AppState>, user_id: u64, album_id: u64) ->
 }
 
 #[tauri::command(rename_all = "camelCase")]
+fn add_favorite_playlist(state: State<AppState>, user_id: u64, playlist_uuid: String) -> Result<(), String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.add_favorite_playlist(user_id, &playlist_uuid)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn remove_favorite_playlist(state: State<AppState>, user_id: u64, playlist_uuid: String) -> Result<(), String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.remove_favorite_playlist(user_id, &playlist_uuid)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn add_tracks_to_playlist(state: State<AppState>, playlist_id: String, track_ids: Vec<u64>) -> Result<(), String> {
+    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.add_tracks_to_playlist(&playlist_id, &track_ids)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn get_album_detail(state: State<AppState>, album_id: u64) -> Result<TidalAlbumDetail, String> {
     let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_album_detail(album_id)
@@ -770,6 +788,9 @@ pub fn run() {
             is_album_favorited,
             add_favorite_album,
             remove_favorite_album,
+            add_favorite_playlist,
+            remove_favorite_playlist,
+            add_tracks_to_playlist,
             get_album_detail,
             get_album_tracks,
             get_stream_url,

@@ -1,8 +1,7 @@
 import { Play, Pause, Music } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
-import { getTidalImageUrl, type Track } from "../hooks/useAudio";
-import TidalImage from "./TidalImage";
+import { type Track } from "../hooks/useAudio";
 import TrackList from "./TrackList";
 
 interface MixPageProps {
@@ -116,9 +115,7 @@ export default function MixPage({ mixId, mixInfo, onBack }: MixPageProps) {
       <div className="flex-1 bg-linear-to-b from-[#1a1a1a] to-[#121212] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center px-8">
           <Music size={48} className="text-[#535353]" />
-          <p className="text-white font-semibold text-lg">
-            Couldn't load mix
-          </p>
+          <p className="text-white font-semibold text-lg">Couldn't load mix</p>
           <p className="text-[#a6a6a6] text-sm max-w-md">{error}</p>
           <button
             onClick={onBack}

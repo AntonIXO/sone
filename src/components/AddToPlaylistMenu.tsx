@@ -1,13 +1,14 @@
 import { Plus, Search, X, Loader2 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
+import { useToast } from "../contexts/ToastContext";
 import { type Playlist, getTidalImageUrl } from "../hooks/useAudio";
 import TidalImage from "./TidalImage";
 
 // ─── Public API ────────────────────────────────────────────────
 
 interface AddToPlaylistMenuProps {
-  trackId: number;
+  trackIds: number[];
   anchorRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
 }
@@ -38,15 +39,16 @@ function pushRecentPlaylistId(playlistId: string) {
 // ─── Create-playlist modal ─────────────────────────────────────
 
 function CreatePlaylistModal({
-  trackId,
+  trackIds,
   onClose,
   onCreated,
 }: {
-  trackId: number;
+  trackIds: number[];
   onClose: () => void;
   onCreated: (playlist: Playlist) => void;
 }) {
-  const { createPlaylist, addTrackToPlaylist } = useAudioContext();
+  const { createPlaylist, addTracksToPlaylist } = useAudioContext();
+  const { showToast } = useToast();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -74,14 +76,17 @@ function CreatePlaylistModal({
     setSaving(true);
     try {
       const playlist = await createPlaylist(title.trim(), description.trim());
-      await addTrackToPlaylist(playlist.uuid, trackId);
+      if (trackIds.length > 0) {
+        await addTracksToPlaylist(playlist.uuid, trackIds);
+      }
       pushRecentPlaylistId(playlist.uuid);
+      showToast(`Created playlist "${title.trim()}"`);
       onCreated(playlist);
     } catch {
       setError("Failed to create playlist");
       setSaving(false);
     }
-  }, [title, description, saving, createPlaylist, addTrackToPlaylist, trackId, onCreated]);
+  }, [title, description, saving, createPlaylist, addTracksToPlaylist, trackIds, showToast, onCreated]);
 
   return (
     <div
@@ -173,11 +178,12 @@ function CreatePlaylistModal({
 // ─── Main context-menu component ───────────────────────────────
 
 export default function AddToPlaylistMenu({
-  trackId,
+  trackIds,
   anchorRef,
   onClose,
 }: AddToPlaylistMenuProps) {
-  const { userPlaylists, addTrackToPlaylist } = useAudioContext();
+  const { userPlaylists, addTracksToPlaylist } = useAudioContext();
+  const { showToast } = useToast();
 
   const [showAll, setShowAll] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -286,22 +292,28 @@ export default function AddToPlaylistMenu({
       setError(null);
       setAddingTo(playlist.uuid);
       try {
-        await addTrackToPlaylist(playlist.uuid, trackId);
+        await addTracksToPlaylist(playlist.uuid, trackIds);
         pushRecentPlaylistId(playlist.uuid);
         setAddedTo((prev) => new Set([...prev, playlist.uuid]));
+        const label = playlist.title.length > 25 ? playlist.title.slice(0, 23) + "…" : playlist.title;
+        showToast(
+          trackIds.length > 1
+            ? `Added ${trackIds.length} tracks to "${label}"`
+            : `Added to "${label}"`
+        );
         setTimeout(onClose, 500);
       } catch (err: any) {
         const errStr = String(err);
         if (errStr.includes("409") || errStr.toLowerCase().includes("dupe")) {
-          setError("Track already in this playlist");
+          setError(trackIds.length > 1 ? "Some tracks already in this playlist" : "Track already in this playlist");
         } else {
-          setError("Failed to add track");
+          setError(trackIds.length > 1 ? "Failed to add tracks" : "Failed to add track");
         }
       } finally {
         setAddingTo(null);
       }
     },
-    [addTrackToPlaylist, trackId, onClose]
+    [addTracksToPlaylist, trackIds, onClose, showToast]
   );
 
   // ── Playlist rows ──
@@ -527,7 +539,7 @@ export default function AddToPlaylistMenu({
       {/* Create playlist modal (portal-like, rendered above everything) */}
       {showCreateModal && (
         <CreatePlaylistModal
-          trackId={trackId}
+          trackIds={trackIds}
           onClose={() => setShowCreateModal(false)}
           onCreated={() => {
             setShowCreateModal(false);

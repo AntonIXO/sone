@@ -1,8 +1,9 @@
 import { Play, Pause, User, Music, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
-import { getTidalImageUrl, type Track, type AlbumDetail } from "../hooks/useAudio";
+import { getTidalImageUrl, type Track, type AlbumDetail, type MediaItemType } from "../hooks/useAudio";
 import TidalImage from "./TidalImage";
+import MediaContextMenu from "./MediaContextMenu";
 
 interface ArtistPageProps {
   artistId: number;
@@ -58,6 +59,30 @@ export default function ArtistPage({
   const [error, setError] = useState<string | null>(null);
   const [showAllTracks, setShowAllTracks] = useState(false);
   const [showBioModal, setShowBioModal] = useState(false);
+
+  // Context menu state for album cards
+  const [contextMenu, setContextMenu] = useState<{
+    item: MediaItemType;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  const handleAlbumContextMenu = useCallback(
+    (e: React.MouseEvent, album: AlbumDetail) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        item: {
+          type: "album",
+          id: album.id,
+          title: album.title,
+          cover: album.cover,
+          artistName: album.artist?.name,
+        },
+        position: { x: e.clientX, y: e.clientY },
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -424,6 +449,7 @@ export default function ArtistPage({
                     artistName: album.artist?.name,
                   })
                 }
+                onContextMenu={(e) => handleAlbumContextMenu(e, album)}
                 className="flex-shrink-0 w-[180px] p-3 bg-[#181818] hover:bg-[#282828] rounded-lg cursor-pointer group transition-[background-color] duration-300"
               >
                 <div className="w-full aspect-square mb-3 relative overflow-hidden shadow-lg bg-[#282828] rounded-md">
@@ -480,6 +506,15 @@ export default function ArtistPage({
             This artist doesn't have any tracks or albums yet.
           </p>
         </div>
+      )}
+
+      {/* Media context menu */}
+      {contextMenu && (
+        <MediaContextMenu
+          item={contextMenu.item}
+          cursorPosition={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </div>
   );

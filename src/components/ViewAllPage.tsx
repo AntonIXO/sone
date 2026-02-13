@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowLeft, Play, User, Music } from "lucide-react";
 import { useAudioContext } from "../contexts/AudioContext";
-import { getTidalImageUrl } from "../hooks/useAudio";
+import { getTidalImageUrl, type MediaItemType } from "../hooks/useAudio";
+import MediaContextMenu from "./MediaContextMenu";
 
 // Helpers for extracting data from items (handles V1 and V2 formats)
 function getItemImage(item: any, size: number = 320): string {
@@ -82,6 +83,45 @@ export default function ViewAllPage({ title, apiPath, onBack }: ViewAllPageProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    item: MediaItemType;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, item: any) => {
+      let mediaItem: MediaItemType | null = null;
+
+      if (isArtistItem(item)) {
+        return; // Artists don't get a context menu
+      } else if (item.uuid) {
+        mediaItem = {
+          type: "playlist",
+          uuid: item.uuid,
+          title: item.title || getItemTitle(item),
+          image: item.squareImage || item.image,
+          creatorName: item.creator?.name || (item.creator?.id === 0 ? "TIDAL" : undefined),
+        };
+      } else if (item.id && !isTrackItem(item)) {
+        mediaItem = {
+          type: "album",
+          id: item.id,
+          title: item.title || getItemTitle(item),
+          cover: item.cover,
+          artistName: item.artist?.name || item.artists?.[0]?.name,
+        };
+      }
+
+      if (mediaItem) {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu({ item: mediaItem, position: { x: e.clientX, y: e.clientY } });
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (hasLoadedRef.current) return;
@@ -179,6 +219,7 @@ export default function ViewAllPage({ title, apiPath, onBack }: ViewAllPageProps
                 <div
                   key={id}
                   onClick={() => handleItemClick(item)}
+                  onContextMenu={(e) => handleContextMenu(e, item)}
                   className="p-3 bg-[#181818] hover:bg-[#282828] rounded-lg cursor-pointer group transition-[background-color] duration-300"
                 >
                   <div
@@ -240,6 +281,15 @@ export default function ViewAllPage({ title, apiPath, onBack }: ViewAllPageProps
               );
             })}
           </div>
+        )}
+
+        {/* Media context menu */}
+        {contextMenu && (
+          <MediaContextMenu
+            item={contextMenu.item}
+            cursorPosition={contextMenu.position}
+            onClose={() => setContextMenu(null)}
+          />
         )}
       </div>
     </div>

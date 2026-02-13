@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAudioContext } from "../contexts/AudioContext";
+import { useToast } from "../contexts/ToastContext";
 import { type Track } from "../hooks/useAudio";
 import AddToPlaylistMenu from "./AddToPlaylistMenu";
 
@@ -43,6 +44,7 @@ export default function TrackContextMenu({
     navigateToTrackRadio,
     removeTrackFromPlaylist,
   } = useAudioContext();
+  const { showToast } = useToast();
 
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number }>({
@@ -143,28 +145,35 @@ export default function TrackContextMenu({
     };
   }, [onClose, anchorRef, showPlaylistSubmenu]);
 
+  const trackLabel = track.title.length > 30 ? track.title.slice(0, 28) + "…" : track.title;
+
   const handlePlayNext = useCallback(() => {
     playNextInQueue(track);
+    showToast(`"${trackLabel}" will play next`);
     onClose();
-  }, [track, playNextInQueue, onClose]);
+  }, [track, trackLabel, playNextInQueue, showToast, onClose]);
 
   const handleAddToQueue = useCallback(() => {
     addToQueue(track);
+    showToast(`Added "${trackLabel}" to queue`);
     onClose();
-  }, [track, addToQueue, onClose]);
+  }, [track, trackLabel, addToQueue, showToast, onClose]);
 
   const handleToggleFavorite = useCallback(async () => {
     try {
       if (isFav) {
         await removeFavoriteTrack(track.id);
+        showToast(`Removed "${trackLabel}" from Loved tracks`);
       } else {
         await addFavoriteTrack(track.id);
+        showToast(`Added "${trackLabel}" to Loved tracks`);
       }
     } catch (err) {
       console.error("Failed to toggle favorite:", err);
+      showToast("Failed to update Loved tracks", "error");
     }
     onClose();
-  }, [track.id, isFav, addFavoriteTrack, removeFavoriteTrack, onClose]);
+  }, [track.id, trackLabel, isFav, addFavoriteTrack, removeFavoriteTrack, showToast, onClose]);
 
   const handleGoToTrackRadio = useCallback(() => {
     navigateToTrackRadio(track.id, {
@@ -180,11 +189,13 @@ export default function TrackContextMenu({
     try {
       await removeTrackFromPlaylist(playlistId, index);
       onTrackRemoved?.(index);
+      showToast(`Removed "${trackLabel}" from playlist`);
     } catch (err) {
       console.error("Failed to remove track from playlist:", err);
+      showToast("Failed to remove track", "error");
     }
     onClose();
-  }, [playlistId, index, removeTrackFromPlaylist, onTrackRemoved, onClose]);
+  }, [playlistId, index, trackLabel, removeTrackFromPlaylist, onTrackRemoved, showToast, onClose]);
 
   const menuItemClass =
     "w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#ffffff0a] transition-colors text-left text-[14px] text-[#e0e0e0] hover:text-white";
@@ -264,7 +275,7 @@ export default function TrackContextMenu({
       {/* Add to playlist submenu */}
       {showPlaylistSubmenu && (
         <AddToPlaylistMenu
-          trackId={track.id}
+          trackIds={[track.id]}
           anchorRef={playlistBtnRef}
           onClose={() => {
             setShowPlaylistSubmenu(false);

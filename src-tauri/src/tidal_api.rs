@@ -1032,6 +1032,96 @@ impl TidalClient {
         Ok(())
     }
 
+    pub fn add_favorite_playlist(&self, user_id: u64, playlist_uuid: &str) -> Result<(), String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        let response = self
+            .client
+            .post(format!("{}/users/{}/favorites/playlists", TIDAL_API_URL, user_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[("countryCode", "US")])
+            .form(&[("uuid", playlist_uuid)])
+            .send()
+            .map_err(|e| format!("Failed to favorite playlist: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(format!("API error ({}): {}", status, body));
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_favorite_playlist(&self, user_id: u64, playlist_uuid: &str) -> Result<(), String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        let response = self
+            .client
+            .delete(format!(
+                "{}/users/{}/favorites/playlists/{}",
+                TIDAL_API_URL, user_id, playlist_uuid
+            ))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[("countryCode", "US")])
+            .send()
+            .map_err(|e| format!("Failed to remove favorite playlist: {}", e))?;
+
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(format!("API error ({}): {}", status, body));
+        }
+
+        Ok(())
+    }
+
+    pub fn add_tracks_to_playlist(&self, playlist_id: &str, track_ids: &[u64]) -> Result<(), String> {
+        let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
+
+        // Get the playlist ETag which is required for modifications
+        let head_response = self
+            .client
+            .get(format!("{}/playlists/{}", TIDAL_API_URL, playlist_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[("countryCode", "US")])
+            .send()
+            .map_err(|e| format!("Failed to get playlist ETag: {}", e))?;
+
+        let etag = head_response
+            .headers()
+            .get("etag")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("*")
+            .to_string();
+
+        let ids_str = track_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+
+        let response = self
+            .client
+            .post(format!("{}/playlists/{}/items", TIDAL_API_URL, playlist_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .header("If-None-Match", &etag)
+            .query(&[("countryCode", "US")])
+            .form(&[
+                ("trackIds", ids_str.as_str()),
+                ("onDupes", "SKIP"),
+            ])
+            .send()
+            .map_err(|e| format!("Failed to add tracks to playlist: {}", e))?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            let body = response.text().unwrap_or_default();
+            return Err(format!("Add tracks to playlist API error ({}): {}", status, body));
+        }
+
+        Ok(())
+    }
+
     pub fn get_stream_url(&self, track_id: u64, quality: &str) -> Result<StreamInfo, String> {
         let tokens = self.tokens.as_ref().ok_or("Not authenticated")?;
 

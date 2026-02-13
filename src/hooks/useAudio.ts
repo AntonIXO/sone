@@ -178,6 +178,12 @@ export interface ArtistDetail {
   picture?: string;
 }
 
+/** Union type describing a right-clickable media item (album / playlist / mix) */
+export type MediaItemType =
+  | { type: "album"; id: number; title: string; cover?: string; artistName?: string }
+  | { type: "playlist"; uuid: string; title: string; image?: string; creatorName?: string }
+  | { type: "mix"; mixId: string; title: string; image?: string; subtitle?: string };
+
 interface PlaybackSnapshot {
   currentTrack: Track | null;
   queue: Track[];
@@ -920,6 +926,47 @@ export function useAudio() {
     }
   };
 
+  const addFavoritePlaylist = async (playlistUuid: string): Promise<void> => {
+    if (!authTokens?.user_id) throw new Error("Not authenticated");
+    try {
+      await invoke("add_favorite_playlist", {
+        userId: authTokens.user_id,
+        playlistUuid,
+      });
+    } catch (error: any) {
+      console.error("Failed to favorite playlist:", error);
+      throw error;
+    }
+  };
+
+  const removeFavoritePlaylist = async (playlistUuid: string): Promise<void> => {
+    if (!authTokens?.user_id) throw new Error("Not authenticated");
+    try {
+      await invoke("remove_favorite_playlist", {
+        userId: authTokens.user_id,
+        playlistUuid,
+      });
+    } catch (error: any) {
+      console.error("Failed to remove favorite playlist:", error);
+      throw error;
+    }
+  };
+
+  const addTracksToPlaylist = useCallback(
+    async (playlistId: string, trackIds: number[]): Promise<void> => {
+      try {
+        await invoke("add_tracks_to_playlist", {
+          playlistId,
+          trackIds,
+        });
+      } catch (error: any) {
+        console.error("Failed to add tracks to playlist:", error);
+        throw error;
+      }
+    },
+    []
+  );
+
   const navigateToFavorites = () => {
     const view: AppView = { type: "favorites" };
     window.history.pushState(view, "");
@@ -1004,6 +1051,25 @@ export function useAudio() {
       return await invoke<Track[]>("get_mix_items", { mixId });
     },
     []
+  );
+
+  /** Fetch all tracks from a media item (album / playlist / mix) */
+  const fetchMediaTracks = useCallback(
+    async (item: MediaItemType): Promise<Track[]> => {
+      switch (item.type) {
+        case "album": {
+          const result = await getAlbumTracks(item.id, 0, 200);
+          return result.items;
+        }
+        case "playlist": {
+          return await getPlaylistTracks(item.uuid);
+        }
+        case "mix": {
+          return await getMixItems(item.mixId);
+        }
+      }
+    },
+    [getAlbumTracks, getPlaylistTracks, getMixItems]
   );
 
   const getArtistDetail = useCallback(
@@ -1236,6 +1302,10 @@ export function useAudio() {
     isAlbumFavorited,
     addFavoriteAlbum,
     removeFavoriteAlbum,
+    addFavoritePlaylist,
+    removeFavoritePlaylist,
+    addTracksToPlaylist,
+    fetchMediaTracks,
     navigateToAlbum,
     navigateToPlaylist,
     navigateToFavorites,
