@@ -459,7 +459,7 @@ fn get_session_user_id(state: State<AppState>) -> Result<u64, String> {
 #[tauri::command(rename_all = "camelCase")]
 fn get_user_profile(state: State<AppState>, user_id: u64) -> Result<(String, Option<String>), String> {
     println!("DEBUG [get_user_profile]: user_id={}", user_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_user_profile(user_id)
 }
 
@@ -468,7 +468,7 @@ fn get_user_profile(state: State<AppState>, user_id: u64) -> Result<(String, Opt
 #[tauri::command(rename_all = "camelCase")]
 fn get_user_playlists(state: State<AppState>, user_id: u64) -> Result<Vec<TidalPlaylist>, String> {
     println!("DEBUG: Getting playlists for user_id: {}", user_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     let result = client.get_user_playlists(user_id);
     match &result {
         Ok(playlists) => println!("DEBUG: Got {} playlists", playlists.len()),
@@ -485,14 +485,14 @@ fn get_playlist_tracks(
     playlist_id: String,
 ) -> Result<Vec<TidalTrack>, String> {
     println!("DEBUG [get_playlist_tracks]: playlist_id={}", playlist_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_playlist_tracks(&playlist_id)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_favorite_playlists(state: State<AppState>, user_id: u64) -> Result<Vec<TidalPlaylist>, String> {
     println!("DEBUG [get_favorite_playlists]: user_id={}", user_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_favorite_playlists(user_id)
 }
 
@@ -538,7 +538,7 @@ fn get_favorite_tracks(
     limit: u32,
 ) -> Result<PaginatedTracks, String> {
     println!("DEBUG [get_favorite_tracks]: user_id={}, offset={}, limit={}", user_id, offset, limit);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_favorite_tracks(user_id, offset, limit)
 }
 
@@ -615,7 +615,7 @@ fn add_tracks_to_playlist(state: State<AppState>, playlist_id: String, track_ids
 #[tauri::command(rename_all = "camelCase")]
 fn get_album_detail(state: State<AppState>, album_id: u64) -> Result<TidalAlbumDetail, String> {
     println!("DEBUG [get_album_detail]: album_id={}", album_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_album_detail(album_id)
 }
 
@@ -627,14 +627,14 @@ fn get_album_tracks(
     limit: u32,
 ) -> Result<PaginatedTracks, String> {
     println!("DEBUG [get_album_tracks]: album_id={}, offset={}, limit={}", album_id, offset, limit);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_album_tracks(album_id, offset, limit)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_stream_url(state: State<AppState>, track_id: u64, quality: String) -> Result<StreamInfo, String> {
     println!("DEBUG [get_stream_url]: track_id={}, quality={}", track_id, quality);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_stream_url(track_id, &quality)
 }
 
@@ -643,15 +643,18 @@ fn get_stream_url(state: State<AppState>, track_id: u64, quality: String) -> Res
 #[tauri::command(rename_all = "camelCase")]
 fn search_tidal(state: State<AppState>, query: String, limit: u32) -> Result<TidalSearchResults, String> {
     println!("DEBUG [search_tidal]: query=\"{}\", limit={}", query, limit);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.search(&query, limit)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_suggestions(state: State<AppState>, query: String, limit: u32) -> SuggestionsResponse {
     println!("DEBUG [get_suggestions]: query=\"{}\", limit={}", query, limit);
-    let client = state.tidal_client.lock().unwrap();
-    client.get_suggestions(&query, limit)
+    if let Ok(mut client) = state.tidal_client.lock() {
+        client.get_suggestions(&query, limit)
+    } else {
+        SuggestionsResponse { text_suggestions: vec![], direct_hits: vec![] }
+    }
 }
 
 // ==================== Home Page & Pages API ====================
@@ -679,7 +682,7 @@ fn get_home_page(state: State<AppState>) -> Result<HomePageCached, String> {
     }
 
     // No valid cache — fetch fresh
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     let home = client.get_home_page()?;
 
     // Cache the result
@@ -696,7 +699,7 @@ fn get_home_page(state: State<AppState>) -> Result<HomePageCached, String> {
 #[tauri::command]
 fn refresh_home_page(state: State<AppState>) -> Result<HomePageResponse, String> {
     println!("DEBUG [refresh_home_page]");
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     let home = client.get_home_page()?;
 
     // Update cache
@@ -724,7 +727,7 @@ fn get_favorite_artists(state: State<AppState>, user_id: u64, limit: u32) -> Res
         }
     }
 
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     let artists = client.get_favorite_artists(user_id, limit)?;
 
     // Cache
@@ -741,42 +744,42 @@ fn get_favorite_artists(state: State<AppState>, user_id: u64, limit: u32) -> Res
 #[tauri::command(rename_all = "camelCase")]
 fn get_page_section(state: State<AppState>, api_path: String) -> Result<HomePageResponse, String> {
     println!("DEBUG [get_page_section]: api_path={}", api_path);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_page(&api_path)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_mix_items(state: State<AppState>, mix_id: String) -> Result<Vec<TidalTrack>, String> {
     println!("DEBUG [get_mix_items]: mix_id={}", mix_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_mix_items(&mix_id)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_artist_detail(state: State<AppState>, artist_id: u64) -> Result<TidalArtistDetail, String> {
     println!("DEBUG [get_artist_detail]: artist_id={}", artist_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_artist_detail(artist_id)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_artist_top_tracks(state: State<AppState>, artist_id: u64, limit: u32) -> Result<Vec<TidalTrack>, String> {
     println!("DEBUG [get_artist_top_tracks]: artist_id={}, limit={}", artist_id, limit);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_artist_top_tracks(artist_id, limit)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_artist_albums(state: State<AppState>, artist_id: u64, limit: u32) -> Result<Vec<TidalAlbumDetail>, String> {
     println!("DEBUG [get_artist_albums]: artist_id={}, limit={}", artist_id, limit);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_artist_albums(artist_id, limit)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_artist_bio(state: State<AppState>, artist_id: u64) -> Result<String, String> {
     println!("DEBUG [get_artist_bio]: artist_id={}", artist_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_artist_bio(artist_id)
 }
 
@@ -881,21 +884,21 @@ fn debug_home_page_raw(state: State<AppState>) -> Result<String, String> {
 #[tauri::command(rename_all = "camelCase")]
 fn get_track_lyrics(state: State<AppState>, track_id: u64) -> Result<TidalLyrics, String> {
     println!("DEBUG [get_track_lyrics]: track_id={}", track_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_track_lyrics(track_id)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_track_credits(state: State<AppState>, track_id: u64) -> Result<Vec<TidalCredit>, String> {
     println!("DEBUG [get_track_credits]: track_id={}", track_id);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_track_credits(track_id)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 fn get_track_radio(state: State<AppState>, track_id: u64, limit: u32) -> Result<Vec<TidalTrack>, String> {
     println!("DEBUG [get_track_radio]: track_id={}, limit={}", track_id, limit);
-    let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
     client.get_track_radio(track_id, limit)
 }
 
@@ -908,7 +911,7 @@ fn play_tidal_track(state: State<AppState>, track_id: u64) -> Result<StreamInfo,
     // encrypted DASH streams that require Widevine). With a secret, the
     // confidential PKCE credentials may return unencrypted Hi-Res BTS streams.
     let stream_info = {
-        let client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+        let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
         let has_secret = !client.client_secret.is_empty();
 
         if has_secret {
