@@ -455,7 +455,9 @@ function SuggestedTrackRow({
             <Heart
               size={15}
               className={
-                isFav ? "text-th-accent" : "text-th-text-disabled hover:text-white"
+                isFav
+                  ? "text-th-accent"
+                  : "text-th-text-disabled hover:text-white"
               }
               fill={isFav ? "currentColor" : "none"}
             />
@@ -813,7 +815,7 @@ function LyricsTab() {
   if (lrcLines.length > 0) {
     lineRefs.current = [];
     return (
-      <div className="relative h-full overflow-hidden">
+      <div className="relative overflow-hidden h-full">
         <div
           ref={containerRef}
           className="h-full overflow-y-auto overflow-x-hidden flex flex-col gap-3 py-10 pr-0 scrollbar-thin scrollbar-thumb-th-button scrollbar-track-transparent"
@@ -1120,7 +1122,9 @@ function TrackRow({
               <Heart
                 size={15}
                 className={
-                  isFav ? "text-th-accent" : "text-th-text-disabled hover:text-white"
+                  isFav
+                    ? "text-th-accent"
+                    : "text-th-text-disabled hover:text-white"
                 }
                 fill={isFav ? "currentColor" : "none"}
               />
@@ -1171,7 +1175,8 @@ function TrackRow({
 // ─── Main Drawer ─────────────────────────────────────────────────────────────
 
 /** Extract the average color from an image URL via fetch + canvas. */
-function useDominantColor(imageUrl: string | undefined) {
+// @ts-ignore
+function _useDominantColor(imageUrl: string | undefined) {
   const [color, setColor] = useState<string | null>(null);
   const prevUrl = useRef<string | undefined>(undefined);
 
@@ -1280,60 +1285,55 @@ export default function NowPlayingDrawer() {
   const coverUrl = currentTrack
     ? getTidalImageUrl(currentTrack.album?.cover, 80)
     : undefined;
-  const dominantColor = useDominantColor(coverUrl);
-
-  // Manage close animation — keep drawer mounted while animating out
-  const [visible, setVisible] = useState(false);
-  const [closing, setClosing] = useState(false);
-
-  useEffect(() => {
-    if (drawerOpen && currentTrack) {
-      setVisible(true);
-      setClosing(false);
-    } else if (visible) {
-      // Start close animation
-      setClosing(true);
-      const timer = setTimeout(() => {
-        setVisible(false);
-        setClosing(false);
-      }, 280); // match animation duration
-      return () => clearTimeout(timer);
-    }
-  }, [drawerOpen, currentTrack]);
-
-  const handleClose = useCallback(() => {
-    setDrawerOpen(false);
-  }, [setDrawerOpen]);
+  const dominantColor = _useDominantColor(coverUrl);
 
   // Close on Escape
   useEffect(() => {
-    if (!visible) return;
+    if (!drawerOpen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
+      if (e.key === "Escape") setDrawerOpen(false);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [visible, handleClose]);
+  }, [drawerOpen, setDrawerOpen]);
 
-  if (!visible || !currentTrack) return null;
+  // Don't render anything until there's a track to show
+  if (!currentTrack) return null;
 
   return (
-    <div className="fixed inset-0 bottom-[90px] z-40 flex flex-col">
+    <div
+      className={`fixed inset-0 bottom-[90px] z-40 flex flex-col transition-[visibility] ${
+        drawerOpen ? "visible" : "invisible delay-200"
+      }`}
+    >
       {/* Backdrop */}
       <div
-        className={`absolute inset-0 bg-black/80 transition-opacity duration-280 ${closing ? "opacity-0" : "opacity-100"}`}
-        onClick={handleClose}
+        className={`absolute inset-0 bg-black/80 transition-opacity duration-200 ${
+          drawerOpen ? "opacity-100" : "opacity-0"
+        }`}
+        onClick={() => setDrawerOpen(false)}
       />
 
-      {/* Drawer content */}
-      <div className={`relative z-10 flex-1 flex overflow-hidden bg-th-base ${closing ? "animate-slideDown" : "animate-slideUp"}`}>
+      {/* Drawer content — GPU-promoted layer for smooth animation */}
+      <div
+        className="relative z-10 flex-1 flex overflow-hidden bg-th-base"
+        style={{
+          transform: drawerOpen
+            ? "translate3d(0,0,0)"
+            : "translate3d(0,100%,0)",
+          transition: "transform 250ms cubic-bezier(0.32, 0.72, 0, 1)",
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+        }}
+      >
         {/* Gradient overlay from dominant album color */}
         <div
-          className="absolute inset-0 pointer-events-none z-0 transition-colors duration-1000 ease-in-out"
+          className="absolute inset-0 pointer-events-none z-0"
           style={{
             backgroundColor: dominantColor
               ? `rgba(${dominantColor}, 0.50)`
               : "transparent",
+            transition: "background-color 1000ms ease-in-out",
             maskImage: `linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.05) 60%, transparent 70%)`,
             WebkitMaskImage: `linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.05) 60%, transparent 70%)`,
           }}
@@ -1379,7 +1379,7 @@ export default function NowPlayingDrawer() {
               ))}
             </div>
             <button
-              onClick={handleClose}
+              onClick={() => setDrawerOpen(false)}
               className="w-8 h-8 rounded-full flex items-center justify-center text-th-text-muted hover:text-white hover:bg-white/8 transition-colors duration-150 shrink-0 ml-2"
             >
               <X size={18} />
