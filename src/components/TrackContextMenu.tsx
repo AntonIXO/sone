@@ -162,7 +162,7 @@ export default function TrackContextMenu({
         await removeFavoriteTrack(track.id);
         showToast(`Removed "${trackLabel}" from Loved tracks`);
       } else {
-        await addFavoriteTrack(track.id);
+        await addFavoriteTrack(track.id, track);
         showToast(`Added "${trackLabel}" to Loved tracks`);
       }
     } catch (err) {
@@ -170,7 +170,7 @@ export default function TrackContextMenu({
       showToast("Failed to update Loved tracks", "error");
     }
     onClose();
-  }, [track.id, trackLabel, isFav, addFavoriteTrack, removeFavoriteTrack, showToast, onClose]);
+  }, [track, trackLabel, isFav, addFavoriteTrack, removeFavoriteTrack, showToast, onClose]);
 
   const handleGoToTrackRadio = useCallback(() => {
     navigateToTrackRadio(track.id, {

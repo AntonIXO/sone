@@ -3,7 +3,12 @@ import { useAtom, useAtomValue } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import { favoriteTrackIdsAtom } from "../atoms/favorites";
 import { authTokensAtom } from "../atoms/auth";
-import { invalidateCache } from "../api/tidal";
+import {
+  invalidateCache,
+  addTrackToFavoritesCache,
+  removeTrackFromFavoritesCache,
+} from "../api/tidal";
+import type { Track } from "../types";
 
 export function useFavorites() {
   const [favoriteTrackIds, setFavoriteTrackIds] = useAtom(favoriteTrackIdsAtom);
@@ -13,16 +18,16 @@ export function useFavorites() {
   // AppInitializer to avoid firing once per component that calls useFavorites().
 
   const addFavoriteTrack = useCallback(
-    async (trackId: number): Promise<void> => {
+    async (trackId: number, track?: Track): Promise<void> => {
       if (!authTokens?.user_id) throw new Error("Not authenticated");
       // Optimistic update — reflect in UI immediately
       setFavoriteTrackIds((prev: Set<number>) => new Set([...prev, trackId]));
+      if (track) addTrackToFavoritesCache(authTokens.user_id, track);
       try {
         await invoke("add_favorite_track", {
           userId: authTokens.user_id,
           trackId,
         });
-        invalidateCache("fav-tracks:");
       } catch (error: any) {
         // Revert on failure
         setFavoriteTrackIds((prev: Set<number>) => {
@@ -30,6 +35,7 @@ export function useFavorites() {
           next.delete(trackId);
           return next;
         });
+        if (track) removeTrackFromFavoritesCache(authTokens.user_id, trackId);
         console.error("Failed to favorite track:", error);
         throw error;
       }
@@ -46,12 +52,12 @@ export function useFavorites() {
         next.delete(trackId);
         return next;
       });
+      removeTrackFromFavoritesCache(authTokens.user_id, trackId);
       try {
         await invoke("remove_favorite_track", {
           userId: authTokens.user_id,
           trackId,
         });
-        invalidateCache("fav-tracks:");
       } catch (error: any) {
         // Revert on failure
         setFavoriteTrackIds((prev: Set<number>) => new Set([...prev, trackId]));

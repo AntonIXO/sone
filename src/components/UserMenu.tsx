@@ -1,6 +1,7 @@
-import { LogOut, Palette, User } from "lucide-react";
+import { LogOut, Palette, RefreshCw, User } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { clearCache } from "../api/tidal";
 import ThemeEditor from "./ThemeEditor";
 
 export default function UserMenu() {
@@ -57,6 +58,19 @@ export default function UserMenu() {
           >
             <Palette size={16} />
             Theme
+          </button>
+
+          {/* Refresh */}
+          <button
+            onClick={() => {
+              clearCache();
+              setOpen(false);
+              window.location.reload();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-th-text-secondary hover:text-white hover:bg-th-border-subtle transition-colors"
+          >
+            <RefreshCw size={16} />
+            Refresh App
           </button>
 
           {/* Logout */}

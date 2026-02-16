@@ -910,9 +910,64 @@ impl TidalClient {
         let url = format!("{}/playlists/{}/tracks", TIDAL_API_URL, playlist_id);
         let country_code = self.country_code.clone();
 
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TracksResponse {
+            items: Vec<TidalTrack>,
+            total_number_of_items: u32,
+            #[serde(default)]
+            offset: u32,
+            #[serde(default)]
+            limit: u32,
+        }
+
+        let mut all_tracks: Vec<TidalTrack> = Vec::new();
+        let mut offset: u32 = 0;
+        let page_size: u32 = 100;
+
+        loop {
+            let offset_str = offset.to_string();
+            let limit_str = page_size.to_string();
+
+            let response = self.authenticated_get(&url, &[
+                ("countryCode", &country_code),
+                ("limit", &limit_str),
+                ("offset", &offset_str),
+            ])?;
+
+            let status = response.status();
+            let body = response.text().unwrap_or_default();
+
+            if !status.is_success() {
+                return Err(format!("API error ({}): {}", status, body));
+            }
+
+            let mut data = serde_json::from_str::<TracksResponse>(&body)
+                .map_err(|e| format!("Failed to parse tracks: {} - Body: {}", e, body))?;
+
+            let fetched = data.items.len() as u32;
+            for t in &mut data.items { t.backfill_artist(); }
+            all_tracks.append(&mut data.items);
+
+            if fetched == 0 || all_tracks.len() as u32 >= data.total_number_of_items {
+                break;
+            }
+            offset += fetched;
+        }
+
+        Ok(all_tracks)
+    }
+
+    pub fn get_playlist_tracks_page(&mut self, playlist_id: &str, offset: u32, limit: u32) -> Result<PaginatedTracks, String> {
+        let url = format!("{}/playlists/{}/tracks", TIDAL_API_URL, playlist_id);
+        let limit_str = limit.to_string();
+        let offset_str = offset.to_string();
+        let country_code = self.country_code.clone();
+
         let response = self.authenticated_get(&url, &[
             ("countryCode", &country_code),
-            ("limit", "100"),
+            ("limit", &limit_str),
+            ("offset", &offset_str),
         ])?;
 
         let status = response.status();
@@ -923,15 +978,27 @@ impl TidalClient {
         }
 
         #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
         struct TracksResponse {
             items: Vec<TidalTrack>,
+            total_number_of_items: u32,
+            #[serde(default)]
+            offset: u32,
+            #[serde(default)]
+            limit: u32,
         }
 
         let mut data = serde_json::from_str::<TracksResponse>(&body)
-            .map_err(|e| format!("Failed to parse tracks: {} - Body: {}", e, body))?;
+            .map_err(|e| format!("Failed to parse playlist tracks: {} - Body: {}", e, body))?;
 
         for t in &mut data.items { t.backfill_artist(); }
-        Ok(data.items)
+
+        Ok(PaginatedTracks {
+            items: data.items,
+            total_number_of_items: data.total_number_of_items,
+            offset: data.offset,
+            limit: data.limit,
+        })
     }
 
     pub fn get_album_detail(&mut self, album_id: u64) -> Result<TidalAlbumDetail, String> {

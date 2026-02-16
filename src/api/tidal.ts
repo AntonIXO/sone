@@ -19,8 +19,7 @@ const store = new Map<string, { data: unknown; ts: number }>();
 
 const TTL = {
   SHORT: 2 * 60_000,        // 2 min  — search, suggestions
-  MEDIUM: 5 * 60_000,       // 5 min  — playlists, favorites, mixes
-  LONG: 2 * 60 * 60_000,    // 2 hrs  — page sections
+  LONG: 2 * 60 * 60_000,    // 2 hrs  — playlists, favorites, mixes, page sections
   STATIC: 24 * 60 * 60_000, // 24 hrs — albums, artists, lyrics, credits, bios
 };
 
@@ -40,6 +39,33 @@ export function invalidateCache(prefix: string): void {
   for (const key of store.keys()) {
     if (key.startsWith(prefix)) store.delete(key);
   }
+}
+
+/** Mutate a cached entry in-place. If the key exists, updater receives the data and the result replaces it. */
+function mutateCache<T>(keyPrefix: string, updater: (data: T) => T): void {
+  for (const [key, entry] of store.entries()) {
+    if (key.startsWith(keyPrefix)) {
+      store.set(key, { data: updater(entry.data as T), ts: entry.ts });
+    }
+  }
+}
+
+/** Optimistically prepend a track to all cached favorite-track pages. */
+export function addTrackToFavoritesCache(userId: number, track: Track): void {
+  mutateCache<PaginatedTracks>(`fav-tracks:${userId}:`, (page) => ({
+    ...page,
+    items: [track, ...page.items],
+    totalNumberOfItems: page.totalNumberOfItems + 1,
+  }));
+}
+
+/** Optimistically remove a track from all cached favorite-track pages. */
+export function removeTrackFromFavoritesCache(userId: number, trackId: number): void {
+  mutateCache<PaginatedTracks>(`fav-tracks:${userId}:`, (page) => ({
+    ...page,
+    items: page.items.filter((t) => t.id !== trackId),
+    totalNumberOfItems: Math.max(0, page.totalNumberOfItems - 1),
+  }));
 }
 
 /** Drop the entire cache (e.g. on logout). */
@@ -82,7 +108,9 @@ export async function getSuggestions(
 // ==================== Home Page ====================
 
 export async function getHomePage(): Promise<HomePageCached> {
-  return await invoke<HomePageCached>("get_home_page");
+  return cached("home-page", () =>
+    invoke<HomePageCached>("get_home_page"),
+  TTL.LONG);
 }
 
 export async function refreshHomePage(): Promise<HomePageResponse> {
@@ -178,13 +206,32 @@ export async function getPlaylistTracks(
       console.error("Failed to get playlist tracks:", error);
       throw error;
     }
-  }, TTL.MEDIUM);
+  }, TTL.LONG);
+}
+
+export async function getPlaylistTracksPage(
+  playlistId: string,
+  offset: number = 0,
+  limit: number = 50
+): Promise<PaginatedTracks> {
+  return cached(`playlist-page:${playlistId}:${offset}:${limit}`, async () => {
+    try {
+      return await invoke<PaginatedTracks>("get_playlist_tracks_page", {
+        playlistId,
+        offset,
+        limit,
+      });
+    } catch (error: any) {
+      console.error("Failed to get playlist tracks page:", error);
+      throw error;
+    }
+  }, TTL.LONG);
 }
 
 export async function getMixItems(mixId: string): Promise<Track[]> {
   return cached(`mix:${mixId}`, () =>
     invoke<Track[]>("get_mix_items", { mixId }),
-  TTL.MEDIUM);
+  TTL.LONG);
 }
 
 /** Fetch all tracks from a media item (album / playlist / mix) */
@@ -259,7 +306,7 @@ export async function getFavoriteTracks(
       console.error("Failed to get favorite tracks:", error);
       throw error;
     }
-  }, TTL.MEDIUM);
+  }, TTL.LONG);
 }
 
 export async function getFavoriteArtists(
@@ -268,7 +315,7 @@ export async function getFavoriteArtists(
 ): Promise<ArtistDetail[]> {
   return cached(`fav-artists:${userId}:${limit}`, () =>
     invoke<ArtistDetail[]>("get_favorite_artists", { userId, limit }),
-  TTL.MEDIUM);
+  TTL.LONG);
 }
 
 export async function getFavoriteAlbums(
@@ -277,7 +324,7 @@ export async function getFavoriteAlbums(
 ): Promise<AlbumDetail[]> {
   return cached(`fav-albums:${userId}:${limit}`, () =>
     invoke<AlbumDetail[]>("get_favorite_albums", { userId, limit }),
-  TTL.MEDIUM);
+  TTL.LONG);
 }
 
 // ==================== Auth helpers (never cached) ====================

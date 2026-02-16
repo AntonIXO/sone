@@ -38,6 +38,7 @@ export function usePlaylists() {
           trackId: trackId,
         });
         invalidateCache(`playlist:${playlistId}`);
+        invalidateCache(`playlist-page:${playlistId}`);
       } catch (error: any) {
         console.error("Failed to add track to playlist:", error);
         throw error;
@@ -54,6 +55,7 @@ export function usePlaylists() {
           index,
         });
         invalidateCache(`playlist:${playlistId}`);
+        invalidateCache(`playlist-page:${playlistId}`);
       } catch (error: any) {
         console.error("Failed to remove track from playlist:", error);
         throw error;
@@ -70,6 +72,7 @@ export function usePlaylists() {
           trackIds,
         });
         invalidateCache(`playlist:${playlistId}`);
+        invalidateCache(`playlist-page:${playlistId}`);
       } catch (error: any) {
         console.error("Failed to add tracks to playlist:", error);
         throw error;

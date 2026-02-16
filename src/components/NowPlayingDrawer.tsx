@@ -113,14 +113,14 @@ const QueueTab = memo(function QueueTab() {
   }, []);
 
   const handleToggleFavorite = useCallback(
-    async (trackId: number) => {
+    async (trackId: number, track?: Track) => {
       const isFav = favoriteTrackIds.has(trackId);
       try {
         if (isFav) {
           await removeFavoriteTrack(trackId);
           showToast("Removed from Loved tracks");
         } else {
-          await addFavoriteTrack(trackId);
+          await addFavoriteTrack(trackId, track);
           showToast("Added to Loved tracks");
         }
       } catch {
@@ -161,7 +161,7 @@ const QueueTab = memo(function QueueTab() {
   const trackRowNav = useCallback(
     (track: Track) => ({
       isFav: favoriteTrackIds.has(track.id),
-      onToggleFavorite: () => handleToggleFavorite(track.id),
+      onToggleFavorite: () => handleToggleFavorite(track.id, track),
       onArtistClick: track.artist?.id
         ? () => handleArtistClick(track)
         : undefined,
@@ -317,7 +317,7 @@ function SuggestedTrackRow({
   isFav: boolean;
   onPlay: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
-  onToggleFavorite: (trackId: number, isFav: boolean) => void;
+  onToggleFavorite: (trackId: number, isFav: boolean, track?: Track) => void;
   onArtistClick?: (track: Track) => void;
   onAlbumClick?: (track: Track) => void;
 }) {
@@ -354,9 +354,9 @@ function SuggestedTrackRow({
   const handleToggleFavorite = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      onToggleFavorite(track.id, isFav);
+      onToggleFavorite(track.id, isFav, track);
     },
-    [track.id, isFav, onToggleFavorite]
+    [track, isFav, onToggleFavorite]
   );
 
   const handleAddToQueue = useCallback(
@@ -551,13 +551,13 @@ const SuggestedTab = memo(function SuggestedTab() {
   );
 
   const handleToggleFavorite = useCallback(
-    async (trackId: number, currentlyFav: boolean) => {
+    async (trackId: number, currentlyFav: boolean, track?: Track) => {
       try {
         if (currentlyFav) {
           await removeFavoriteTrack(trackId);
           showToast("Removed from Loved tracks");
         } else {
-          await addFavoriteTrack(trackId);
+          await addFavoriteTrack(trackId, track);
           showToast("Added to Loved tracks");
         }
       } catch {

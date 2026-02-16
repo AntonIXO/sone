@@ -100,7 +100,7 @@ const TrackRow = memo(function TrackRow({
       if (isFav) {
         await removeFavoriteTrack(track.id);
       } else {
-        await addFavoriteTrack(track.id);
+        await addFavoriteTrack(track.id, track);
       }
     } catch (err) {
       console.error("Failed to toggle favorite", err);

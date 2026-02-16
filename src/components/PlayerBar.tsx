@@ -78,7 +78,7 @@ const FavoriteButton = memo(function FavoriteButton() {
       if (isLiked) {
         await removeFavoriteTrack(currentTrack.id);
       } else {
-        await addFavoriteTrack(currentTrack.id);
+        await addFavoriteTrack(currentTrack.id, currentTrack);
       }
     } catch (err) {
       console.error("Failed to toggle track favorite:", err);

@@ -1,14 +1,15 @@
 import { Play, Pause, Music, X, Shuffle, Heart, Loader2, MoreHorizontal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useAtomValue } from "jotai";
 import { isPlayingAtom, currentTrackAtom } from "../atoms/playback";
 import { usePlaybackActions } from "../hooks/usePlaybackActions";
 import { useFavorites } from "../hooks/useFavorites";
-import { getPlaylistTracks } from "../api/tidal";
+import { getPlaylistTracksPage } from "../api/tidal";
 import { getTidalImageUrl, type Track } from "../types";
 import TidalImage from "./TidalImage";
 import TrackList from "./TrackList";
 import MediaContextMenu from "./MediaContextMenu";
+import DebouncedFilterInput from "./DebouncedFilterInput";
 import { DetailPageSkeleton } from "./PageSkeleton";
 
 interface PlaylistViewProps {
@@ -34,40 +35,118 @@ export default function PlaylistView({
   const { playTrack, setQueueTracks, pauseTrack, resumeTrack } =
     usePlaybackActions();
 
-  const [tracks, setTracks] = useState<Track[]>([]);
+  const PAGE_SIZE = 100;
+
+  const [allTracks, setAllTracks] = useState<Track[]>([]);
+  const [totalTracks, setTotalTracks] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const offsetRef = useRef(0);
+  const hasMoreRef = useRef(true);
+  const bgFetchingRef = useRef(false);
+  const cancelledRef = useRef(false);
+  const allTracksRef = useRef<Track[]>([]);
 
-    const loadPlaylist = async () => {
+  useEffect(() => { allTracksRef.current = allTracks; }, [allTracks]);
+
+  // Load first page only
+  useEffect(() => {
+    cancelledRef.current = false;
+    bgFetchingRef.current = false;
+
+    const loadFirstPage = async () => {
       setLoading(true);
       setError(null);
+      setAllTracks([]);
+      offsetRef.current = 0;
+      hasMoreRef.current = true;
 
       try {
-        const playlistTracks = await getPlaylistTracks(playlistId);
-        if (!cancelled) {
-          setTracks(playlistTracks);
-        }
+        const firstPage = await getPlaylistTracksPage(playlistId, 0, PAGE_SIZE);
+        if (cancelledRef.current) return;
+
+        setAllTracks(firstPage.items);
+        setTotalTracks(firstPage.totalNumberOfItems);
+        offsetRef.current = firstPage.items.length;
+        hasMoreRef.current = firstPage.items.length < firstPage.totalNumberOfItems;
       } catch (err: any) {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           console.error("Failed to load playlist:", err);
           setError(err?.message || String(err));
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelledRef.current) setLoading(false);
       }
     };
 
-    loadPlaylist();
-
-    return () => {
-      cancelled = true;
-    };
+    loadFirstPage();
+    return () => { cancelledRef.current = true; };
   }, [playlistId]);
+
+  // Fetch all remaining pages in the background
+  const fetchRemaining = useCallback(async () => {
+    if (bgFetchingRef.current || !hasMoreRef.current) return;
+
+    bgFetchingRef.current = true;
+    try {
+      while (hasMoreRef.current && !cancelledRef.current) {
+        const page = await getPlaylistTracksPage(playlistId, offsetRef.current, PAGE_SIZE);
+        if (cancelledRef.current) return;
+
+        setAllTracks((prev) => [...prev, ...page.items]);
+        setTotalTracks(page.totalNumberOfItems);
+        offsetRef.current += page.items.length;
+        hasMoreRef.current = offsetRef.current < page.totalNumberOfItems;
+      }
+    } catch (err) {
+      console.error("Failed to background-fetch playlist tracks:", err);
+    } finally {
+      bgFetchingRef.current = false;
+    }
+  }, [playlistId]);
+
+  // Manual load-more for infinite scroll
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMoreRef.current || bgFetchingRef.current) return;
+
+    setLoadingMore(true);
+    try {
+      const page = await getPlaylistTracksPage(playlistId, offsetRef.current, PAGE_SIZE);
+      setAllTracks((prev) => [...prev, ...page.items]);
+      setTotalTracks(page.totalNumberOfItems);
+      offsetRef.current += page.items.length;
+      hasMoreRef.current = offsetRef.current < page.totalNumberOfItems;
+    } catch (err) {
+      console.error("Failed to load more playlist tracks:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, playlistId]);
+
+  const tracks = allTracks;
+  const hasMore = allTracks.length < totalTracks;
+
+  // Local search / filter (debounce handled inside DebouncedFilterInput)
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredTracks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return tracks;
+    return tracks.filter(
+      (t) =>
+        t.title.toLowerCase().includes(q) ||
+        (t.artist?.name?.toLowerCase().includes(q)) ||
+        (t.album?.title?.toLowerCase().includes(q))
+    );
+  }, [tracks, searchQuery]);
+
+  const handleSearchFocus = useCallback(() => {
+    if (hasMoreRef.current && !bgFetchingRef.current) {
+      fetchRemaining();
+    }
+  }, [fetchRemaining]);
 
   const trackIds = useMemo(() => new Set(tracks.map((track) => track.id)), [tracks]);
 
@@ -75,6 +154,16 @@ export default function PlaylistView({
     try {
       setQueueTracks(tracks.slice(index + 1));
       await playTrack(track);
+
+      // Kick off background fetch for the rest if needed
+      if (hasMoreRef.current && !bgFetchingRef.current) {
+        await fetchRemaining();
+        const full = allTracksRef.current;
+        const playedIndex = full.findIndex((t) => t.id === track.id);
+        if (playedIndex >= 0) {
+          setQueueTracks(full.slice(playedIndex + 1));
+        }
+      }
     } catch (err) {
       console.error("Failed to play playlist track:", err);
     }
@@ -95,6 +184,14 @@ export default function PlaylistView({
     try {
       setQueueTracks(tracks.slice(1));
       await playTrack(tracks[0]);
+
+      if (hasMoreRef.current && !bgFetchingRef.current) {
+        await fetchRemaining();
+        const full = allTracksRef.current;
+        if (full.length > 1) {
+          setQueueTracks(full.slice(1));
+        }
+      }
     } catch (err) {
       console.error("Failed to play playlist:", err);
     }
@@ -102,7 +199,14 @@ export default function PlaylistView({
 
   const handleShuffle = async () => {
     if (tracks.length === 0) return;
-    const shuffled = [...tracks];
+
+    // If we have more pages, fetch everything first so shuffle includes all tracks
+    if (hasMoreRef.current && !bgFetchingRef.current) {
+      await fetchRemaining();
+    }
+
+    const all = allTracksRef.current.length > 0 ? allTracksRef.current : tracks;
+    const shuffled = [...all];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -152,7 +256,7 @@ export default function PlaylistView({
     ? "You"
     : playlistInfo?.creatorName || undefined;
   const displayTrackCount =
-    tracks.length > 0 ? tracks.length : (playlistInfo?.numberOfTracks ?? 0);
+    totalTracks > 0 ? totalTracks : (playlistInfo?.numberOfTracks ?? 0);
 
   // Show "Read more" if description is long enough to be truncated
   const descriptionIsLong = (displayDescription?.length ?? 0) > 120;
@@ -303,10 +407,22 @@ export default function PlaylistView({
         </div>
       </div>
 
+      {/* Search / Filter bar */}
+      <div className="px-8 pb-4">
+        <DebouncedFilterInput
+          placeholder="Filter playlist on title, artist or album"
+          onChange={setSearchQuery}
+          onFocus={handleSearchFocus}
+        />
+      </div>
+
       <div className="px-8 pb-8">
         <TrackList
-          tracks={tracks}
+          tracks={filteredTracks}
           onPlay={handlePlayTrack}
+          onLoadMore={loadMore}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
           showDateAdded={!!playlistInfo?.isUserPlaylist}
           showArtist={true}
           showAlbum={true}
@@ -315,9 +431,16 @@ export default function PlaylistView({
           playlistId={playlistId}
           isUserPlaylist={playlistInfo?.isUserPlaylist}
           onTrackRemoved={(index) => {
-            setTracks((prev) => prev.filter((_, i) => i !== index));
+            setAllTracks((prev) => prev.filter((_, i) => i !== index));
           }}
         />
+
+        {/* End of list */}
+        {tracks.length > 0 && !hasMore && (
+          <div className="py-6 text-center text-[13px] text-th-text-disabled">
+            {displayTrackCount} TRACK{displayTrackCount !== 1 ? "S" : ""}
+          </div>
+        )}
 
         {tracks.length === 0 && (
           <div className="py-16 text-center">

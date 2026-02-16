@@ -490,6 +490,18 @@ fn get_playlist_tracks(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+fn get_playlist_tracks_page(
+    state: State<AppState>,
+    playlist_id: String,
+    offset: u32,
+    limit: u32,
+) -> Result<PaginatedTracks, String> {
+    println!("DEBUG [get_playlist_tracks_page]: playlist_id={}, offset={}, limit={}", playlist_id, offset, limit);
+    let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
+    client.get_playlist_tracks_page(&playlist_id, offset, limit)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn get_favorite_playlists(state: State<AppState>, user_id: u64) -> Result<Vec<TidalPlaylist>, String> {
     println!("DEBUG [get_favorite_playlists]: user_id={}", user_id);
     let mut client = state.tidal_client.lock().map_err(|e| e.to_string())?;
@@ -1069,6 +1081,7 @@ pub fn run() {
             get_user_profile,
             get_user_playlists,
             get_playlist_tracks,
+            get_playlist_tracks_page,
             get_favorite_playlists,
             get_favorite_albums,
             create_playlist,

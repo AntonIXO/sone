@@ -1,23 +1,27 @@
 import { Heart } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useAtomValue } from "jotai";
 import { usePlaybackActions } from "../hooks/usePlaybackActions";
 import { useAuth } from "../hooks/useAuth";
 import { getFavoriteTracks } from "../api/tidal";
+import { favoriteTrackIdsAtom } from "../atoms/favorites";
 import { type Track } from "../types";
 import TrackList from "./TrackList";
+import DebouncedFilterInput from "./DebouncedFilterInput";
 import { DetailPageSkeleton } from "./PageSkeleton";
 
 interface FavoritesViewProps {
   onBack: () => void;
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
 export default function FavoritesView({ onBack }: FavoritesViewProps) {
   const { authTokens } = useAuth();
   const { playTrack, setQueueTracks } = usePlaybackActions();
+  const favoriteTrackIds = useAtomValue(favoriteTrackIdsAtom);
 
-  const [tracks, setTracks] = useState<Track[]>([]);
+  const [allTracks, setAllTracks] = useState<Track[]>([]);
   const [totalTracks, setTotalTracks] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -26,11 +30,17 @@ export default function FavoritesView({ onBack }: FavoritesViewProps) {
   const offsetRef = useRef(0);
   const hasMoreRef = useRef(true);
 
-  const hasMore = tracks.length < totalTracks;
+  const bgFetchingRef = useRef(false);
+  const cancelledRef = useRef(false);
+  const allTracksRef = useRef<Track[]>([]);
 
-  // Load first page
+  // Keep ref in sync with state so async callbacks read the latest value
+  useEffect(() => { allTracksRef.current = allTracks; }, [allTracks]);
+
+  // Load first page only
   useEffect(() => {
-    let cancelled = false;
+    cancelledRef.current = false;
+    bgFetchingRef.current = false;
 
     const loadFavorites = async () => {
       const userId = authTokens?.user_id;
@@ -42,50 +52,67 @@ export default function FavoritesView({ onBack }: FavoritesViewProps) {
 
       setLoading(true);
       setError(null);
-      setTracks([]);
+      setAllTracks([]);
       offsetRef.current = 0;
       hasMoreRef.current = true;
 
       try {
-        const firstPage = await getFavoriteTracks(
-          userId,
-          0,
-          PAGE_SIZE
-        );
+        const firstPage = await getFavoriteTracks(userId, 0, PAGE_SIZE);
+        if (cancelledRef.current) return;
 
-        if (cancelled) return;
-
-        setTracks(firstPage.items);
+        setAllTracks(firstPage.items);
         setTotalTracks(firstPage.totalNumberOfItems);
         offsetRef.current = firstPage.items.length;
-        hasMoreRef.current =
-          firstPage.items.length < firstPage.totalNumberOfItems;
+        hasMoreRef.current = firstPage.items.length < firstPage.totalNumberOfItems;
       } catch (err: any) {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           console.error("Failed to load favorites:", err);
           setError(err?.message || String(err));
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelledRef.current) setLoading(false);
       }
     };
 
     loadFavorites();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelledRef.current = true; };
   }, [authTokens?.user_id]);
 
-  // Load more tracks
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMoreRef.current) return;
+  // Fetch all remaining pages in the background, appending to state as they arrive
+  const fetchRemaining = useCallback(async () => {
+    if (bgFetchingRef.current || !hasMoreRef.current) return;
     const userId = authTokens?.user_id;
     if (userId == null) return;
 
+    bgFetchingRef.current = true;
+    try {
+      while (hasMoreRef.current && !cancelledRef.current) {
+        const page = await getFavoriteTracks(userId, offsetRef.current, PAGE_SIZE);
+        if (cancelledRef.current) return;
+
+        setAllTracks((prev) => [...prev, ...page.items]);
+        setTotalTracks(page.totalNumberOfItems);
+        offsetRef.current += page.items.length;
+        hasMoreRef.current = offsetRef.current < page.totalNumberOfItems;
+      }
+    } catch (err) {
+      console.error("Failed to background-fetch favorites:", err);
+    } finally {
+      bgFetchingRef.current = false;
+    }
+  }, [authTokens?.user_id]);
+
+  // Manual load-more (infinite scroll trigger) — also kicks off full background fetch
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMoreRef.current) return;
+    if (bgFetchingRef.current) return; // background fetch already running
+
     setLoadingMore(true);
     try {
+      const userId = authTokens?.user_id;
+      if (userId == null) return;
       const page = await getFavoriteTracks(userId, offsetRef.current, PAGE_SIZE);
-      setTracks((prev) => [...prev, ...page.items]);
+      setAllTracks((prev) => [...prev, ...page.items]);
       setTotalTracks(page.totalNumberOfItems);
       offsetRef.current += page.items.length;
       hasMoreRef.current = offsetRef.current < page.totalNumberOfItems;
@@ -96,11 +123,51 @@ export default function FavoritesView({ onBack }: FavoritesViewProps) {
     }
   }, [loadingMore, authTokens?.user_id]);
 
+  const hasMore = allTracks.length < totalTracks;
+
+  // Filter out unfavorited tracks in real-time
+  const tracks = useMemo(
+    () => allTracks.filter((t) => favoriteTrackIds.has(t.id)),
+    [allTracks, favoriteTrackIds]
+  );
+
+  // Local search / filter (debounce handled inside DebouncedFilterInput)
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredTracks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return tracks;
+    return tracks.filter(
+      (t) =>
+        t.title.toLowerCase().includes(q) ||
+        (t.artist?.name?.toLowerCase().includes(q)) ||
+        (t.album?.title?.toLowerCase().includes(q))
+    );
+  }, [tracks, searchQuery]);
+
+  const handleSearchFocus = useCallback(() => {
+    if (hasMoreRef.current && !bgFetchingRef.current) {
+      fetchRemaining();
+    }
+  }, [fetchRemaining]);
+
   const handlePlayTrack = async (track: Track, index: number) => {
     try {
-      const remaining = tracks.slice(index + 1);
-      setQueueTracks(remaining);
+      // Play immediately with what we have
+      const currentTracks = tracks;
+      setQueueTracks(currentTracks.slice(index + 1));
       await playTrack(track);
+
+      // Kick off background fetch for the rest if needed
+      if (hasMoreRef.current && !bgFetchingRef.current) {
+        await fetchRemaining();
+        // Update the queue with the full list now that everything is loaded
+        const full = allTracksRef.current.filter((t) => favoriteTrackIds.has(t.id));
+        const playedIndex = full.findIndex((t) => t.id === track.id);
+        if (playedIndex >= 0) {
+          setQueueTracks(full.slice(playedIndex + 1));
+        }
+      }
     } catch (err) {
       console.error("Failed to play track:", err);
     }
@@ -153,10 +220,19 @@ export default function FavoritesView({ onBack }: FavoritesViewProps) {
         </div>
       </div>
 
+      {/* Search / Filter bar */}
+      <div className="px-8 pb-4">
+        <DebouncedFilterInput
+          placeholder="Filter on title, artist or album"
+          onChange={setSearchQuery}
+          onFocus={handleSearchFocus}
+        />
+      </div>
+
       {/* Track List */}
       <div className="px-8 pb-8">
         <TrackList
-          tracks={tracks}
+          tracks={filteredTracks}
           onPlay={handlePlayTrack}
           onLoadMore={loadMore}
           hasMore={hasMore}
@@ -169,14 +245,14 @@ export default function FavoritesView({ onBack }: FavoritesViewProps) {
         />
 
         {/* End of list */}
-        {!hasMore && tracks.length > 0 && (
+        {tracks.length > 0 && (
           <div className="py-6 text-center text-[13px] text-th-text-disabled">
             {totalTracks} TRACK{totalTracks !== 1 ? "S" : ""}
           </div>
         )}
 
         {/* Empty state */}
-        {!hasMore && tracks.length === 0 && (
+        {tracks.length === 0 && (
           <div className="py-16 text-center">
             <Heart size={48} className="text-th-text-disabled mx-auto mb-4" />
             <p className="text-white font-semibold text-lg mb-2">
