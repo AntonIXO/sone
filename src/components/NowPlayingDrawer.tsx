@@ -12,7 +12,7 @@ import {
   ListPlus,
   GripVertical,
 } from "lucide-react";
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react";
 import { useAtomValue } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -1209,7 +1209,7 @@ function TrackRow({
 
 /** Extract the average color from an image URL via fetch + canvas. */
 // @ts-ignore
-function _useDominantColor(imageUrl: string | undefined) {
+function useDominantColor(imageUrl: string | undefined) {
   const [color, setColor] = useState<string | null>(null);
   const prevUrl = useRef<string | undefined>(undefined);
 
@@ -1318,7 +1318,24 @@ export default function NowPlayingDrawer() {
   const coverUrl = currentTrack
     ? getTidalImageUrl(currentTrack.album?.cover, 80)
     : undefined;
-  const dominantColor = _useDominantColor(coverUrl);
+  const dominantColor = useDominantColor(coverUrl);
+
+  // Derive an adaptive overlay color: darken bright colors and lower their
+  // opacity so text always stays readable against the tinted background.
+  const overlayBg = useMemo(() => {
+    if (!dominantColor) return "transparent";
+    const [r, g, b] = dominantColor.split(",").map((s) => parseInt(s.trim(), 10));
+    // Perceived brightness (ITU-R BT.601)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    // Darken bright colors by mixing toward black
+    const darkFactor = Math.max(0.35, 1 - luminance * 0.7);
+    const dr = Math.round(r * darkFactor);
+    const dg = Math.round(g * darkFactor);
+    const db = Math.round(b * darkFactor);
+    // Opacity: bright → lower (0.35), dark → higher (0.65)
+    const opacity = 0.90 - luminance * 0.3;
+    return `rgba(${dr}, ${dg}, ${db}, ${opacity.toFixed(2)})`;
+  }, [dominantColor]);
 
   // Close on Escape
   useEffect(() => {
@@ -1359,13 +1376,11 @@ export default function NowPlayingDrawer() {
           backfaceVisibility: "hidden",
         }}
       >
-        {/* Gradient overlay from dominant album color */}
+        {/* Gradient overlay from dominant album color (adaptive brightness) */}
         <div
           className="absolute inset-0 pointer-events-none z-0"
           style={{
-            backgroundColor: dominantColor
-              ? `rgba(${dominantColor}, 0.50)`
-              : "transparent",
+            backgroundColor: overlayBg,
             transition: "background-color 1000ms ease-in-out",
             maskImage: `linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.05) 60%, transparent 70%)`,
             WebkitMaskImage: `linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.05) 60%, transparent 70%)`,
