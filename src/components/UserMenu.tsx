@@ -18,6 +18,9 @@ const SHORTCUTS = [
   { keys: "Ctrl + S", desc: "Focus search bar" },
   { keys: "Ctrl + R", desc: "Refresh app data" },
   { keys: "Esc", desc: "Close now-playing drawer" },
+  { keys: "Ctrl + +", desc: "Zoom in" },
+  { keys: "Ctrl + -", desc: "Zoom out" },
+  { keys: "Ctrl + 0", desc: "Reset zoom to 100%" },
   { keys: "?", desc: "Show keyboard shortcuts" },
 ] as const;
 
