@@ -1,4 +1,4 @@
-# Tide Vibe - Tidal Streaming Client for Linux
+# SONE - Tidal Streaming Client for Linux
 
 A native Linux music player that streams from Tidal with bit-perfect audio quality.
 
@@ -43,7 +43,7 @@ A native Linux music player that streams from Tidal with bit-perfect audio quali
 ### Installation
 
 ```bash
-cd ~/dev/tide-vibe
+cd ~/dev/sone
 npm install
 npm run tauri dev
 ```
@@ -75,7 +75,7 @@ For best quality on Linux:
 - **Frontend**: React + Tailwind CSS
 - **API**: Unofficial Tidal API integration
 - **Audio Format**: Streams unencrypted FLAC (LOSSLESS quality)
-- **Config**: Stored in `~/.config/tide-vibe/`
+- **Config**: Stored in `~/.config/sone/`
 
 ## Known Limitations
 

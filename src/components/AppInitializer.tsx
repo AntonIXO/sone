@@ -49,7 +49,7 @@ import {
 import type { AuthTokens, Playlist, Track, PlaybackSnapshot } from "../types";
 import { getTidalImageUrl } from "../types";
 
-const PLAYBACK_STATE_KEY = "tide-vibe.playback-state.v1";
+const PLAYBACK_STATE_KEY = "sone.playback-state.v1";
 
 export function AppInitializer() {
   // Preload subscribes to auth state (single re-render on login)

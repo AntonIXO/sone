@@ -8,8 +8,8 @@ import { favoriteTrackIdsAtom } from "../atoms/favorites";
 import { clearCache } from "../api/tidal";
 import type { AuthTokens, PkceAuthParams, DeviceAuthResponse, Playlist } from "../types";
 
-const PLAYBACK_STATE_KEY = "tide-vibe.playback-state.v1";
-const VOLUME_STATE_KEY = "tide-vibe.volume.v1";
+const PLAYBACK_STATE_KEY = "sone.playback-state.v1";
+const VOLUME_STATE_KEY = "sone.volume.v1";
 
 export function useAuth() {
   const [isAuthenticated, setIsAuthenticated] = useAtom(isAuthenticatedAtom);

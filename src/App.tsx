@@ -21,7 +21,7 @@ import { ToastProvider } from "./contexts/ToastContext";
 import { useTheme } from "./hooks/useTheme";
 import "./App.css";
 
-const ZOOM_KEY = "tide-vibe.zoom.v1";
+const ZOOM_KEY = "sone.zoom.v1";
 const ZOOM_STEP = 0.1;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2.0;

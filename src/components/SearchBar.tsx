@@ -13,7 +13,7 @@ import { getTidalImageUrl, type DirectHitItem, type SuggestionTextItem, type Tra
 import TidalImage from "./TidalImage";
 import TrackContextMenu from "./TrackContextMenu";
 
-const HISTORY_KEY = "tide-vibe-search-history";
+const HISTORY_KEY = "sone.search-history";
 const MAX_HISTORY = 10;
 
 function loadHistory(): string[] {

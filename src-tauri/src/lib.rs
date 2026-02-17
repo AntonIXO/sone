@@ -65,7 +65,7 @@ impl AppState {
     fn new(app_handle: tauri::AppHandle) -> Self {
         // Get config dir
         let mut config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-        config_dir.push("tide-vibe");
+        config_dir.push("sone");
         fs::create_dir_all(&config_dir).ok();
 
         let settings_path = config_dir.join("settings.json");

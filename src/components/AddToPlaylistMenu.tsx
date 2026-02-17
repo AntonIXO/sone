@@ -15,7 +15,7 @@ interface AddToPlaylistMenuProps {
 
 // ─── Recent-playlist persistence ───────────────────────────────
 
-const RECENT_PLAYLISTS_KEY = "tide-vibe.recent-playlists.v1";
+const RECENT_PLAYLISTS_KEY = "sone.recent-playlists.v1";
 const MAX_RECENT = 8;
 const DESC_MAX_LEN = 500;
 
