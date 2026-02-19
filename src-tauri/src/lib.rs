@@ -341,6 +341,7 @@ pub fn run() {
             commands::library::add_favorite_mix,
             commands::library::remove_favorite_mix,
             commands::library::get_favorite_mix_ids,
+            commands::library::get_favorite_mixes,
             commands::library::get_favorite_artists,
             // pages
             commands::pages::get_album_detail,
@@ -353,6 +354,8 @@ pub fn run() {
             commands::pages::get_artist_top_tracks,
             commands::pages::get_artist_albums,
             commands::pages::get_artist_bio,
+            commands::pages::get_artist_page,
+            commands::pages::get_artist_top_tracks_all,
             commands::pages::debug_home_page_raw,
             // search
             commands::search::search_tidal,

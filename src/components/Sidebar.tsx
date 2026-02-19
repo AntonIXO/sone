@@ -8,8 +8,8 @@ import {
 import { usePlaylists } from "../hooks/usePlaylists";
 import { useNavigation } from "../hooks/useNavigation";
 import { useAuth } from "../hooks/useAuth";
-import { getTidalImageUrl, type MediaItemType, type AlbumDetail } from "../types";
-import { getFavoriteAlbums } from "../api/tidal";
+import { getTidalImageUrl, type MediaItemType, type AlbumDetail, type FavoriteMix } from "../types";
+import { getFavoriteAlbums, getFavoriteMixes } from "../api/tidal";
 import TidalImage from "./TidalImage";
 import MediaContextMenu from "./MediaContextMenu";
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -19,6 +19,7 @@ export default function Sidebar() {
   const {
     navigateToPlaylist,
     navigateToAlbum,
+    navigateToMix,
     navigateToFavorites,
     navigateHome,
     navigateToExplore,
@@ -26,9 +27,11 @@ export default function Sidebar() {
   } = useNavigation();
   const { authTokens } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<"playlists" | "albums">("playlists");
+  const [activeFilter, setActiveFilter] = useState<"playlists" | "albums" | "mixes">("playlists");
   const [favoriteAlbumsList, setFavoriteAlbumsList] = useState<AlbumDetail[]>([]);
   const [albumsLoading, setAlbumsLoading] = useState(false);
+  const [favoriteMixesList, setFavoriteMixesList] = useState<FavoriteMix[]>([]);
+  const [mixesLoading, setMixesLoading] = useState(false);
 
   // Fetch favorite albums when switching to albums tab
   useEffect(() => {
@@ -43,6 +46,20 @@ export default function Sidebar() {
       .finally(() => { if (!cancelled) setAlbumsLoading(false); });
     return () => { cancelled = true; };
   }, [activeFilter, authTokens?.user_id]);
+
+  // Fetch favorite mixes when switching to mixes tab
+  useEffect(() => {
+    if (activeFilter !== "mixes") return;
+    let cancelled = false;
+    setMixesLoading(true);
+    getFavoriteMixes()
+      .then((mixes) => {
+        if (!cancelled) setFavoriteMixesList(mixes);
+      })
+      .catch((err) => console.error("Failed to fetch favorite mixes:", err))
+      .finally(() => { if (!cancelled) setMixesLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeFilter]);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -173,7 +190,7 @@ export default function Sidebar() {
         {/* Filter Pills */}
         {!isCollapsed && (
           <div className="px-2 pb-2 flex gap-1.5 overflow-x-auto no-scrollbar">
-            {(["playlists", "albums"] as const).map((tab) => (
+            {(["playlists", "albums", "mixes"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveFilter(tab)}
@@ -183,7 +200,7 @@ export default function Sidebar() {
                     : "bg-white/[0.07] hover:bg-th-inset text-th-text-secondary"
                 }`}
               >
-                {tab === "playlists" ? "Playlists" : "Albums"}
+                {tab === "playlists" ? "Playlists" : tab === "albums" ? "Albums" : "Mixes"}
               </button>
             ))}
           </div>
@@ -294,7 +311,7 @@ export default function Sidebar() {
                 })}
               </div>
             )
-          ) : (
+          ) : activeFilter === "albums" ? (
             /* Albums view */
             albumsLoading ? (
               <div className={`px-3 py-8 text-center ${isCollapsed ? "hidden" : ""}`}>
@@ -350,6 +367,83 @@ export default function Sidebar() {
                         </div>
                         <div className="text-[12px] text-th-text-faint truncate leading-snug mt-0.5">
                           {album.artist?.name || "Unknown Artist"}
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )
+          ) : (
+            /* Mixes view */
+            mixesLoading ? (
+              <div className={`px-3 py-8 text-center ${isCollapsed ? "hidden" : ""}`}>
+                <div className="w-6 h-6 border-2 border-th-accent border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-th-text-muted text-sm mt-3">Loading mixes...</p>
+              </div>
+            ) : favoriteMixesList.length === 0 ? (
+              <div className={`px-3 py-8 text-center ${isCollapsed ? "hidden" : ""}`}>
+                <p className="text-th-text-muted text-sm">No favorite mixes yet</p>
+              </div>
+            ) : (
+              <div className="space-y-px">
+                {favoriteMixesList.map((mix) => (
+                  <button
+                    key={mix.id}
+                    onClick={() =>
+                      navigateToMix(mix.id, {
+                        title: mix.title,
+                        image: mix.images?.MEDIUM?.url,
+                        subtitle: mix.subTitle,
+                      })
+                    }
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setContextMenu({
+                        item: {
+                          type: "mix",
+                          mixId: mix.id,
+                          title: mix.title,
+                          image: mix.images?.MEDIUM?.url,
+                          subtitle: mix.subTitle,
+                        },
+                        position: { x: e.clientX, y: e.clientY },
+                      });
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-1.5 py-2 rounded-md transition-colors duration-150 group ${
+                      currentView.type === "mix" &&
+                      currentView.mixId === mix.id
+                        ? "bg-white/[0.08]"
+                        : "hover:bg-th-border-subtle"
+                    } ${isCollapsed ? "justify-center" : ""}`}
+                    title={mix.title}
+                  >
+                    <div
+                      className={`bg-th-surface-hover shrink-0 overflow-hidden rounded ${
+                        isCollapsed ? "w-10 h-10" : "w-10 h-10"
+                      }`}
+                    >
+                      {mix.images?.SMALL?.url ? (
+                        <img
+                          src={mix.images.SMALL.url}
+                          alt={mix.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Music size={16} className="text-gray-600" />
+                        </div>
+                      )}
+                    </div>
+
+                    {!isCollapsed && (
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="text-[14px] font-medium text-white truncate leading-snug">
+                          {mix.title}
+                        </div>
+                        <div className="text-[12px] text-th-text-faint truncate leading-snug mt-0.5">
+                          {mix.subTitle || "Mix"}
                         </div>
                       </div>
                     )}

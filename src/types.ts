@@ -94,7 +94,12 @@ export type AppView =
       trackInfo?: { title: string; artistName?: string; cover?: string };
     }
   | { type: "explore" }
-  | { type: "explorePage"; apiPath: string; title: string };
+  | { type: "explorePage"; apiPath: string; title: string }
+  | {
+      type: "artistTracks";
+      artistId: number;
+      artistName: string;
+    };
 
 export interface SearchResults {
   artists: { id: number; name: string; picture?: string }[];
@@ -213,12 +218,41 @@ export interface ArtistDetail {
   picture?: string;
 }
 
+/** Parsed from the raw v1 pages/artist response on the frontend */
+export interface ArtistPageData {
+  artistName: string;
+  picture?: string;
+  bio?: string;
+  bioSource?: string;
+  topTracks: any[];
+  sections: ArtistPageSection[];
+}
+
+export interface ArtistPageSection {
+  title: string;
+  type: string;
+  items: any[];
+  apiPath?: string;
+}
+
 /** Union type describing a right-clickable media item (album / playlist / mix / artist) */
 export type MediaItemType =
   | { type: "album"; id: number; title: string; cover?: string; artistName?: string }
   | { type: "playlist"; uuid: string; title: string; image?: string; creatorName?: string }
   | { type: "mix"; mixId: string; title: string; image?: string; subtitle?: string }
   | { type: "artist"; id: number; name: string; picture?: string };
+
+export interface FavoriteMix {
+  id: string;
+  title: string;
+  subTitle: string;
+  mixType?: string;
+  images?: {
+    SMALL?: { url: string };
+    MEDIUM?: { url: string };
+    LARGE?: { url: string };
+  };
+}
 
 export interface PlaybackSnapshot {
   currentTrack: Track | null;

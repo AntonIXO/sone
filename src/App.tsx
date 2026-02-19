@@ -7,6 +7,7 @@ import FavoritesView from "./components/FavoritesView";
 import SearchView from "./components/SearchView";
 import ViewAllPage from "./components/ViewAllPage";
 import ArtistPage from "./components/ArtistPage";
+import ArtistTracksPage from "./components/ArtistTracksPage";
 import MixPage from "./components/MixPage";
 import TrackRadioPage from "./components/TrackRadioPage";
 import ExplorePage from "./components/ExplorePage";
@@ -131,6 +132,15 @@ function AppContent() {
             key={currentView.artistId}
             artistId={currentView.artistId}
             artistInfo={currentView.artistInfo}
+            onBack={navigateHome}
+          />
+        );
+      case "artistTracks":
+        return (
+          <ArtistTracksPage
+            key={currentView.artistId}
+            artistId={currentView.artistId}
+            artistName={currentView.artistName}
             onBack={navigateHome}
           />
         );

@@ -1507,40 +1507,35 @@ impl TidalClient {
     }
 
     /// Fetch favorite mix IDs from api.tidal.com/v2/favorites/mixes.
-    pub async fn get_favorite_mix_ids(&self) -> Result<Vec<String>, SoneError> {
-        let tokens = self.tokens.as_ref().ok_or(SoneError::NotAuthenticated)?;
-
-        let response = self
-            .client
-            .get(format!("{}/favorites/mixes", TIDAL_API_V2_URL))
-            .header("Authorization", format!("Bearer {}", tokens.access_token))
-            .query(&[
-                ("countryCode", self.country_code.as_str()),
-                ("limit", "2000"),
-                ("offset", "0"),
-            ])
-            .send()
-            .await?;
-
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-
-        log::debug!("[get_favorite_mix_ids]: status={}, body_len={}", status, body.len());
-
-        if !status.is_success() {
-            return Err(SoneError::Api { status: status.as_u16(), body });
-        }
-
-        // Response is an array of mix objects with "id" field
-        let items: Vec<serde_json::Value> = serde_json::from_str(&body)
-            .unwrap_or_default();
-        let ids: Vec<String> = items
+    pub async fn get_favorite_mix_ids(&mut self) -> Result<Vec<String>, SoneError> {
+        let mixes = self.get_favorite_mixes().await?;
+        let ids: Vec<String> = mixes
             .iter()
             .filter_map(|item| item.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
             .collect();
-
         log::debug!("[get_favorite_mix_ids]: found {} mix IDs", ids.len());
         Ok(ids)
+    }
+
+    /// Fetch full favorite mix objects from api.tidal.com/v2/favorites/mixes.
+    pub async fn get_favorite_mixes(&mut self) -> Result<Vec<serde_json::Value>, SoneError> {
+        let url = format!("{}/favorites/mixes", TIDAL_API_V2_URL);
+        let cc = self.country_code.clone();
+        let body = self.api_get_body(&url, &[
+            ("countryCode", &cc),
+            ("locale", "en_US"),
+            ("deviceType", "BROWSER"),
+            ("limit", "2000"),
+            ("offset", "0"),
+        ]).await?;
+
+        log::debug!("[get_favorite_mixes]: body_preview={}", &body[..body.len().min(500)]);
+
+        let items: Vec<serde_json::Value> = serde_json::from_str(&body)
+            .unwrap_or_default();
+
+        log::debug!("[get_favorite_mixes]: found {} mixes", items.len());
+        Ok(items)
     }
 
     pub async fn add_tracks_to_playlist(&self, playlist_id: &str, track_ids: &[u64]) -> Result<(), SoneError> {
@@ -2915,6 +2910,29 @@ impl TidalClient {
             }
             Err(_) => Ok(String::new()), // Bio not always available
         }
+    }
+
+    pub async fn get_artist_page(&mut self, artist_id: u64) -> Result<Value, SoneError> {
+        let cc = self.country_code.clone();
+        let body = self.api_get_body(
+            &format!("/pages/artist?artistId={}", artist_id),
+            &[("countryCode", &cc), ("deviceType", "BROWSER"), ("locale", "en_US")],
+        ).await?;
+        serde_json::from_str(&body)
+            .map_err(|e| SoneError::Parse(format!("artist page JSON: {}", e)))
+    }
+
+    pub async fn get_artist_top_tracks_all(&mut self, artist_id: u64) -> Result<Value, SoneError> {
+        let url = format!("{}/artist/ARTIST_TOP_TRACKS/view-all", TIDAL_API_V2_URL);
+        let cc = self.country_code.clone();
+        let id_str = artist_id.to_string();
+        let body = self.api_get_body(&url, &[
+            ("artistId", &id_str), ("locale", "en_US"), ("countryCode", &cc),
+            ("deviceType", "BROWSER"), ("platform", "WEB"),
+            ("limit", "50"), ("offset", "0"),
+        ]).await?;
+        serde_json::from_str(&body)
+            .map_err(|e| SoneError::Parse(format!("artist top tracks JSON: {}", e)))
     }
 
     pub async fn get_page(&mut self, api_path: &str) -> Result<HomePageResponse, SoneError> {

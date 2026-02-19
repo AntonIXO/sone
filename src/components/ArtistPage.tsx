@@ -1,25 +1,29 @@
-import { Play, Pause, User, Music, X, Shuffle, UserPlus, UserCheck } from "lucide-react";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { Play, Pause, User, X, Shuffle, UserPlus, UserCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { useAtomValue } from "jotai";
 import { isPlayingAtom, currentTrackAtom } from "../atoms/playback";
 import { usePlaybackActions } from "../hooks/usePlaybackActions";
 import { useFavorites } from "../hooks/useFavorites";
 import { useNavigation } from "../hooks/useNavigation";
-import {
-  getArtistDetail,
-  getArtistTopTracks,
-  getArtistAlbums,
-  getArtistBio,
-} from "../api/tidal";
+import { getArtistPage } from "../api/tidal";
 import {
   getTidalImageUrl,
-  type Track,
-  type AlbumDetail,
+  type ArtistPageData,
+  type ArtistPageSection,
   type MediaItemType,
 } from "../types";
 import TidalImage from "./TidalImage";
+import MediaCard from "./MediaCard";
 import MediaContextMenu from "./MediaContextMenu";
+import TrackContextMenu from "./TrackContextMenu";
 import { ArtistPageSkeleton } from "./PageSkeleton";
+import {
+  getItemImage,
+  getItemTitle,
+  getItemSubtitle,
+  getItemId,
+  isMixItem,
+} from "../utils/itemHelpers";
 
 interface ArtistPageProps {
   artistId: number;
@@ -37,13 +41,9 @@ function formatDuration(seconds: number): string {
 function cleanBio(raw: string): string {
   return (
     raw
-      // [wimpLink artistId="123"]Name[/wimpLink] → Name
       .replace(/\[wimpLink[^\]]*\]/g, "")
       .replace(/\[\/wimpLink\]/g, "")
-      // [wimpLink albumId="123"]Title[/wimpLink] → Title
-      // catch any remaining wimpLink variants
       .replace(/\[[^\]]*\]/g, "")
-      // Strip HTML tags
       .replace(/<[^>]*>/g, "")
       .trim()
   );
@@ -58,47 +58,29 @@ export default function ArtistPage({
   const currentTrack = useAtomValue(currentTrackAtom);
   const { playTrack, setQueueTracks, pauseTrack, resumeTrack } =
     usePlaybackActions();
-  const { followedArtistIds, followArtist, unfollowArtist } = useFavorites();
-  const { navigateToAlbum } = useNavigation();
+  const { followedArtistIds, followArtist, unfollowArtist,
+    favoriteAlbumIds, addFavoriteAlbum, removeFavoriteAlbum,
+    favoritePlaylistUuids, addFavoritePlaylist, removeFavoritePlaylist,
+    favoriteMixIds, addFavoriteMix, removeFavoriteMix,
+  } = useFavorites();
+  const { navigateToAlbum, navigateToArtist, navigateToArtistTracks, navigateToPlaylist, navigateToMix } = useNavigation();
   const isFollowed = followedArtistIds.has(artistId);
 
-  const [topTracks, setTopTracks] = useState<Track[]>([]);
-  const [albums, setAlbums] = useState<AlbumDetail[]>([]);
-  const [bio, setBio] = useState<string>("");
-  const [picture, setPicture] = useState<string | undefined>(
-    artistInfo?.picture
-  );
-  const [artistName, setArtistName] = useState<string>(
-    artistInfo?.name || "Artist"
-  );
+  const [pageData, setPageData] = useState<ArtistPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showAllTracks, setShowAllTracks] = useState(false);
   const [showBioModal, setShowBioModal] = useState(false);
 
-  // Context menu state for album cards
   const [contextMenu, setContextMenu] = useState<{
     item: MediaItemType;
     position: { x: number; y: number };
   } | null>(null);
 
-  const handleAlbumContextMenu = useCallback(
-    (e: React.MouseEvent, album: AlbumDetail) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setContextMenu({
-        item: {
-          type: "album",
-          id: album.id,
-          title: album.title,
-          cover: album.cover,
-          artistName: album.artist?.name,
-        },
-        position: { x: e.clientX, y: e.clientY },
-      });
-    },
-    []
-  );
+  const [trackContextMenu, setTrackContextMenu] = useState<{
+    track: any;
+    index: number;
+    position: { x: number; y: number };
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,27 +90,15 @@ export default function ArtistPage({
       setError(null);
 
       try {
-        const [detail, tracks, artistAlbums, artistBio] = await Promise.all([
-          getArtistDetail(artistId).catch(() => null),
-          getArtistTopTracks(artistId, 20),
-          getArtistAlbums(artistId, 20),
-          getArtistBio(artistId).catch(() => ""),
-        ]);
-
+        const data = await getArtistPage(artistId);
         if (!cancelled) {
-          // Use the artist detail for the most accurate picture/name
-          if (detail) {
-            if (detail.picture) setPicture(detail.picture);
-            if (detail.name) setArtistName(detail.name);
-          }
-          setTopTracks(tracks);
-          setAlbums(artistAlbums);
-          setBio(artistBio);
+          setPageData(data);
         }
       } catch (err: any) {
         if (!cancelled) {
           console.error("Failed to load artist:", err);
-          setError(err?.message || String(err));
+          const msg = err?.message;
+          setError(typeof msg === "string" ? msg : "Failed to load artist");
         }
       } finally {
         if (!cancelled) {
@@ -138,20 +108,24 @@ export default function ArtistPage({
     };
 
     loadArtist();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [artistId]);
 
+  // Derived state from pageData
+  const displayName = pageData?.artistName || artistInfo?.name || "Artist";
+  const picture = pageData?.picture || artistInfo?.picture;
+  const bio = pageData?.bio || "";
+  const bioSource = pageData?.bioSource;
+  const topTracks = pageData?.topTracks || [];
+
   const trackIds = useMemo(
-    () => new Set(topTracks.map((track) => track.id)),
+    () => new Set(topTracks.map((t: any) => t.id).filter(Boolean)),
     [topTracks]
   );
 
-  const handlePlayTrack = async (track: Track, index: number) => {
+  const handlePlayTrack = async (track: any, index: number, trackList: any[]) => {
     try {
-      setQueueTracks(topTracks.slice(index + 1));
+      setQueueTracks(trackList.slice(index + 1));
       await playTrack(track);
     } catch (err) {
       console.error("Failed to play artist track:", err);
@@ -198,24 +172,105 @@ export default function ArtistPage({
       if (isFollowed) {
         await unfollowArtist(artistId);
       } else {
-        await followArtist(artistId, { id: artistId, name: artistName, picture });
+        await followArtist(artistId, { id: artistId, name: displayName, picture });
       }
     } catch (err) {
       console.error("Failed to toggle follow:", err);
     }
   };
 
-  const isCurrentlyPlaying = (track: Track) =>
-    currentTrack?.id === track.id && isPlaying;
-  const isCurrentTrackRow = (track: Track) => currentTrack?.id === track.id;
+  const handleCardContextMenu = useCallback(
+    (e: React.MouseEvent, item: any, sectionType: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      let mediaItem: MediaItemType | null = null;
+
+      if (sectionType === "ALBUM_LIST") {
+        mediaItem = {
+          type: "album",
+          id: item.id,
+          title: item.title || getItemTitle(item),
+          cover: item.cover,
+          artistName: item.artist?.name || item.artists?.[0]?.name,
+        };
+      } else if (sectionType === "PLAYLIST_LIST") {
+        mediaItem = {
+          type: "playlist",
+          uuid: item.uuid,
+          title: item.title || getItemTitle(item),
+          image: item.squareImage || item.image,
+          creatorName: item.creator?.name,
+        };
+      } else if (sectionType === "ARTIST_LIST") {
+        mediaItem = {
+          type: "artist",
+          id: item.id,
+          name: item.name || getItemTitle(item),
+          picture: item.picture,
+        };
+      } else if (isMixItem(item, sectionType)) {
+        const mixId = item.mixId || item.id?.toString();
+        if (mixId) {
+          mediaItem = {
+            type: "mix",
+            mixId,
+            title: getItemTitle(item),
+            image: getItemImage(item),
+            subtitle: getItemSubtitle(item),
+          };
+        }
+      }
+
+      if (mediaItem) {
+        setContextMenu({ item: mediaItem, position: { x: e.clientX, y: e.clientY } });
+      }
+    },
+    []
+  );
+
+  const handleCardClick = useCallback(
+    (item: any, sectionType: string) => {
+      if (sectionType === "ALBUM_LIST") {
+        navigateToAlbum(item.id, {
+          title: item.title,
+          cover: item.cover,
+          artistName: item.artist?.name || item.artists?.[0]?.name,
+        });
+      } else if (sectionType === "ARTIST_LIST") {
+        navigateToArtist(item.id, {
+          name: item.name || getItemTitle(item),
+          picture: item.picture,
+        });
+      } else if (sectionType === "PLAYLIST_LIST") {
+        navigateToPlaylist(item.uuid, {
+          title: item.title,
+          image: item.squareImage || item.image,
+          description: item.description,
+          creatorName: item.creator?.name,
+          numberOfTracks: item.numberOfTracks,
+        });
+      } else if (isMixItem(item, sectionType)) {
+        const mixId = item.mixId || item.id?.toString();
+        if (mixId) {
+          navigateToMix(mixId, {
+            title: getItemTitle(item),
+            image: getItemImage(item),
+            subtitle: getItemSubtitle(item),
+          });
+        }
+      }
+    },
+    [navigateToAlbum, navigateToArtist, navigateToPlaylist, navigateToMix]
+  );
+
+  const isCurrentlyPlaying = (trackId: number) =>
+    currentTrack?.id === trackId && isPlaying;
+  const isCurrentTrackRow = (trackId: number) => currentTrack?.id === trackId;
   const artistPlaying = !!(
     currentTrack &&
     trackIds.has(currentTrack.id) &&
     isPlaying
   );
-
-  const displayName = artistName;
-  const displayTracks = showAllTracks ? topTracks : topTracks.slice(0, 5);
 
   if (loading) {
     return <ArtistPageSkeleton />;
@@ -252,7 +307,6 @@ export default function ArtistPage({
               alt={displayName}
               className="w-full h-full object-cover"
               onError={(e) => {
-                // Try 320 as fallback if 640 fails
                 const img = e.target as HTMLImageElement;
                 const fallback = getTidalImageUrl(picture, 320);
                 if (img.src !== fallback) {
@@ -299,7 +353,6 @@ export default function ArtistPage({
             className="bg-th-elevated rounded-xl shadow-2xl max-w-[700px] w-[90%] max-h-[80vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header: avatar + name + close */}
             <div className="flex items-center gap-3 px-6 pt-5 pb-4">
               <div className="w-11 h-11 shrink-0 rounded-full overflow-hidden bg-th-surface-hover">
                 {picture ? (
@@ -328,7 +381,6 @@ export default function ArtistPage({
               </button>
             </div>
 
-            {/* Bio text */}
             <div className="px-6 pb-6 overflow-y-auto scrollbar-thin scrollbar-thumb-th-button scrollbar-track-transparent">
               {cleanBio(bio)
                 .split(/\n\n|\n/)
@@ -341,9 +393,11 @@ export default function ArtistPage({
                     {paragraph.trim()}
                   </p>
                 ))}
-              <p className="text-[12px] text-th-text-faint mt-6 italic">
-                Artist bio from TiVo
-              </p>
+              {bioSource && (
+                <p className="text-[12px] text-th-text-faint mt-6 italic">
+                  Artist bio from {bioSource}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -382,176 +436,61 @@ export default function ArtistPage({
         </button>
       </div>
 
-      {/* Top Tracks */}
-      {topTracks.length > 0 && (
-        <div className="px-8 pb-6">
-          <h2 className="text-[22px] font-bold text-white mb-4">
-            Popular tracks
-          </h2>
-          <div className="flex flex-col">
-            {displayTracks.map((track, index) => {
-              const isActive = isCurrentTrackRow(track);
-              const playing = isCurrentlyPlaying(track);
+      {/* Dynamic Sections */}
+      {pageData?.sections.map((section, sectionIdx) => {
+        if (!section.items || section.items.length === 0) return null;
 
-              return (
-                <div
-                  key={`${track.id}-${index}`}
-                  onClick={() => handlePlayTrack(track, index)}
-                  className={`grid grid-cols-[36px_1fr_minmax(140px,1fr)_72px] gap-4 px-4 py-2.5 rounded-md cursor-pointer group transition-colors ${
-                    isActive ? "bg-[#ffffff0a]" : "hover:bg-[#ffffff08]"
-                  }`}
-                >
-                  <div className="flex items-center justify-end">
-                    {playing ? (
-                      <div className="flex items-end gap-[3px] h-4">
-                        <span className="w-[3px] h-full bg-th-accent rounded-full playing-bar" />
-                        <span
-                          className="w-[3px] h-full bg-th-accent rounded-full playing-bar"
-                          style={{ animationDelay: "0.2s" }}
-                        />
-                        <span
-                          className="w-[3px] h-full bg-th-accent rounded-full playing-bar"
-                          style={{ animationDelay: "0.4s" }}
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <span
-                          className={`text-[15px] tabular-nums group-hover:hidden ${
-                            isActive ? "text-th-accent" : "text-th-text-muted"
-                          }`}
-                        >
-                          {index + 1}
-                        </span>
-                        <Play
-                          size={14}
-                          fill="white"
-                          className="text-white hidden group-hover:block"
-                        />
-                      </>
-                    )}
-                  </div>
+        if (section.type === "TRACK_LIST") {
+          return (
+            <TrackSection
+              key={sectionIdx}
+              section={section}
+              onPlayTrack={handlePlayTrack}
+              onViewAll={() => navigateToArtistTracks(artistId, displayName)}
+              isCurrentTrackRow={isCurrentTrackRow}
+              isCurrentlyPlaying={isCurrentlyPlaying}
+              navigateToAlbum={navigateToAlbum}
+              onTrackContextMenu={(e, track, index) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setTrackContextMenu({
+                  track,
+                  index,
+                  position: { x: e.clientX, y: e.clientY },
+                });
+              }}
+            />
+          );
+        }
 
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative w-10 h-10 shrink-0 rounded bg-th-surface-hover overflow-hidden">
-                      <TidalImage
-                        src={getTidalImageUrl(track.album?.cover, 160)}
-                        alt={track.album?.title || track.title}
-                        className="w-full h-full"
-                      />
-                    </div>
-                    <div className="flex flex-col justify-center min-w-0">
-                      <span
-                        className={`text-[15px] font-medium truncate leading-snug ${
-                          isActive ? "text-th-accent" : "text-white"
-                        }`}
-                      >
-                        {track.title}
-                      </span>
-                    </div>
-                  </div>
+        if (["ALBUM_LIST", "ARTIST_LIST", "PLAYLIST_LIST", "MIX_LIST"].includes(section.type)) {
+          return (
+            <CardScrollSection
+              key={sectionIdx}
+              section={section}
+              onCardClick={handleCardClick}
+              onContextMenu={handleCardContextMenu}
+              favoriteAlbumIds={favoriteAlbumIds}
+              addFavoriteAlbum={addFavoriteAlbum}
+              removeFavoriteAlbum={removeFavoriteAlbum}
+              favoritePlaylistUuids={favoritePlaylistUuids}
+              addFavoritePlaylist={addFavoritePlaylist}
+              removeFavoritePlaylist={removeFavoritePlaylist}
+              followedArtistIds={followedArtistIds}
+              followArtist={followArtist}
+              unfollowArtist={unfollowArtist}
+              favoriteMixIds={favoriteMixIds}
+              addFavoriteMix={addFavoriteMix}
+              removeFavoriteMix={removeFavoriteMix}
+            />
+          );
+        }
 
-                  <div className="flex items-center min-w-0">
-                    <span
-                      className="text-[14px] text-th-text-muted truncate hover:text-white hover:underline transition-colors cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (track.album?.id) {
-                          navigateToAlbum(track.album.id, {
-                            title: track.album.title,
-                            cover: track.album.cover,
-                            artistName: track.artist?.name,
-                          });
-                        }
-                      }}
-                    >
-                      {track.album?.title || ""}
-                    </span>
-                  </div>
+        return null;
+      })}
 
-                  <div className="flex items-center justify-end text-[14px] text-th-text-muted tabular-nums">
-                    {formatDuration(track.duration)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {topTracks.length > 5 && (
-            <button
-              onClick={() => setShowAllTracks(!showAllTracks)}
-              className="mt-3 px-4 py-2 text-[13px] font-bold text-th-text-muted hover:text-white transition-colors"
-            >
-              {showAllTracks
-                ? "Show less"
-                : `See all ${topTracks.length} tracks`}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Albums / Discography */}
-      {albums.length > 0 && (
-        <div className="px-8 pb-8">
-          <h2 className="text-[22px] font-bold text-white mb-4">Discography</h2>
-          <div className="flex gap-4 overflow-x-auto no-scrollbar scroll-smooth pb-2">
-            {albums.map((album) => (
-              <div
-                key={album.id}
-                onClick={() =>
-                  navigateToAlbum(album.id, {
-                    title: album.title,
-                    cover: album.cover,
-                    artistName: album.artist?.name,
-                  })
-                }
-                onContextMenu={(e) => handleAlbumContextMenu(e, album)}
-                className="flex-shrink-0 w-[180px] p-3 bg-th-elevated hover:bg-th-surface-hover rounded-lg cursor-pointer group transition-[background-color] duration-300"
-              >
-                <div className="w-full aspect-square mb-3 relative overflow-hidden shadow-lg bg-th-surface-hover rounded-md">
-                  {album.cover ? (
-                    <TidalImage
-                      src={getTidalImageUrl(album.cover, 320)}
-                      alt={album.title}
-                      className="w-full h-full"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-th-button to-th-surface">
-                      <Music size={40} className="text-gray-600" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigateToAlbum(album.id, {
-                        title: album.title,
-                        cover: album.cover,
-                        artistName: album.artist?.name,
-                      });
-                    }}
-                    className="absolute bottom-2 right-2 w-10 h-10 bg-th-accent rounded-full flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-[opacity,transform] duration-300 scale-90 group-hover:scale-100 hover:scale-110"
-                  >
-                    <Play size={20} fill="black" className="text-black ml-1" />
-                  </button>
-                </div>
-                <h4 className="font-bold text-[14px] text-white truncate mb-1">
-                  {album.title}
-                </h4>
-                <p className="text-[12px] text-th-text-muted">
-                  {album.releaseDate
-                    ? new Date(album.releaseDate).getFullYear()
-                    : ""}
-                  {album.numberOfTracks
-                    ? ` · ${album.numberOfTracks} tracks`
-                    : ""}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {topTracks.length === 0 && albums.length === 0 && (
+      {/* Empty state */}
+      {pageData && pageData.sections.length === 0 && topTracks.length === 0 && (
         <div className="px-8 py-16 text-center">
           <User size={48} className="text-th-text-disabled mx-auto mb-4" />
           <p className="text-white font-semibold text-lg mb-2">
@@ -563,7 +502,6 @@ export default function ArtistPage({
         </div>
       )}
 
-      {/* Media context menu */}
       {contextMenu && (
         <MediaContextMenu
           item={contextMenu.item}
@@ -571,6 +509,297 @@ export default function ArtistPage({
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      {trackContextMenu && (
+        <TrackContextMenu
+          track={trackContextMenu.track}
+          index={trackContextMenu.index}
+          cursorPosition={trackContextMenu.position}
+          anchorRef={{ current: null }}
+          onClose={() => setTrackContextMenu(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ==================== Track Section ====================
+
+function TrackSection({
+  section,
+  onPlayTrack,
+  onViewAll,
+  isCurrentTrackRow,
+  isCurrentlyPlaying,
+  navigateToAlbum,
+  onTrackContextMenu,
+}: {
+  section: ArtistPageSection;
+  onPlayTrack: (track: any, index: number, trackList: any[]) => void;
+  onViewAll: () => void;
+  isCurrentTrackRow: (trackId: number) => boolean;
+  isCurrentlyPlaying: (trackId: number) => boolean;
+  navigateToAlbum: (id: number, info?: any) => void;
+  onTrackContextMenu: (e: React.MouseEvent, track: any, index: number) => void;
+}) {
+  const items = section.items || [];
+  const displayTracks = items.slice(0, 5);
+
+  return (
+    <div className="px-8 pb-6">
+      {section.title && (
+        <h2 className="text-[22px] font-bold text-white mb-4">
+          {section.title}
+        </h2>
+      )}
+      <div className="flex flex-col">
+        {displayTracks.map((track, index) => {
+          const trackId = track.id;
+          const isActive = isCurrentTrackRow(trackId);
+          const playing = isCurrentlyPlaying(trackId);
+          const albumCover = track.album?.cover || track.album?.imageCover;
+          const albumTitle = track.album?.title;
+          const albumId = track.album?.id;
+          const artistName = track.artist?.name || track.artists?.[0]?.name;
+
+          return (
+            <div
+              key={`${trackId}-${index}`}
+              onClick={() => onPlayTrack(track, index, items)}
+              onContextMenu={(e) => onTrackContextMenu(e, track, index)}
+              className={`grid grid-cols-[36px_1fr_minmax(140px,1fr)_72px] gap-4 px-4 py-2.5 rounded-md cursor-pointer group transition-colors ${
+                isActive ? "bg-[#ffffff0a]" : "hover:bg-[#ffffff08]"
+              }`}
+            >
+              <div className="flex items-center justify-end">
+                {playing ? (
+                  <div className="flex items-end gap-[3px] h-4">
+                    <span className="w-[3px] h-full bg-th-accent rounded-full playing-bar" />
+                    <span
+                      className="w-[3px] h-full bg-th-accent rounded-full playing-bar"
+                      style={{ animationDelay: "0.2s" }}
+                    />
+                    <span
+                      className="w-[3px] h-full bg-th-accent rounded-full playing-bar"
+                      style={{ animationDelay: "0.4s" }}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <span
+                      className={`text-[15px] tabular-nums group-hover:hidden ${
+                        isActive ? "text-th-accent" : "text-th-text-muted"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <Play
+                      size={14}
+                      fill="white"
+                      className="text-white hidden group-hover:block"
+                    />
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative w-10 h-10 shrink-0 rounded bg-th-surface-hover overflow-hidden">
+                  <TidalImage
+                    src={getTidalImageUrl(albumCover, 160)}
+                    alt={albumTitle || track.title}
+                    className="w-full h-full"
+                  />
+                </div>
+                <div className="flex flex-col justify-center min-w-0">
+                  <span
+                    className={`text-[15px] font-medium truncate leading-snug ${
+                      isActive ? "text-th-accent" : "text-white"
+                    }`}
+                  >
+                    {track.title}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center min-w-0">
+                <span
+                  className="text-[14px] text-th-text-muted truncate hover:text-white hover:underline transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (albumId) {
+                      navigateToAlbum(albumId, {
+                        title: albumTitle,
+                        cover: albumCover,
+                        artistName,
+                      });
+                    }
+                  }}
+                >
+                  {albumTitle || ""}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end text-[14px] text-th-text-muted tabular-nums">
+                {formatDuration(track.duration)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {section.apiPath && (
+        <button
+          onClick={onViewAll}
+          className="mt-3 px-4 py-2 text-[13px] font-bold text-th-text-muted hover:text-white transition-colors"
+        >
+          View all
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ==================== Card Scroll Section ====================
+
+function CardScrollSection({
+  section,
+  onCardClick,
+  onContextMenu,
+  favoriteAlbumIds, addFavoriteAlbum, removeFavoriteAlbum,
+  favoritePlaylistUuids, addFavoritePlaylist, removeFavoritePlaylist,
+  followedArtistIds, followArtist, unfollowArtist,
+  favoriteMixIds, addFavoriteMix, removeFavoriteMix,
+}: {
+  section: ArtistPageSection;
+  onCardClick: (item: any, sectionType: string) => void;
+  onContextMenu: (e: React.MouseEvent, item: any, sectionType: string) => void;
+  favoriteAlbumIds: Set<number>;
+  addFavoriteAlbum: (id: number, album: any) => void;
+  removeFavoriteAlbum: (id: number) => void;
+  favoritePlaylistUuids: Set<string>;
+  addFavoritePlaylist: (uuid: string, playlist: any) => void;
+  removeFavoritePlaylist: (uuid: string) => void;
+  followedArtistIds: Set<number>;
+  followArtist: (id: number, detail: any) => void;
+  unfollowArtist: (id: number) => void;
+  favoriteMixIds: Set<string>;
+  addFavoriteMix: (id: string) => void;
+  removeFavoriteMix: (id: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  };
+
+  const scroll = (direction: "left" | "right") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const scrollAmount = el.clientWidth * 0.8;
+    el.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  };
+
+  const sectionType = section.type;
+  const isArtistSection = sectionType === "ARTIST_LIST";
+
+  return (
+    <div className="px-8 pb-8">
+      <div className="flex items-center justify-between mb-4">
+        {section.title && (
+          <h2 className="text-[22px] font-bold text-white tracking-tight">
+            {section.title}
+          </h2>
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => scroll("left")}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              canScrollLeft
+                ? "bg-th-inset hover:bg-th-inset-hover text-white"
+                : "text-th-text-disabled cursor-default"
+            }`}
+            disabled={!canScrollLeft}
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            onClick={() => scroll("right")}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+              canScrollRight
+                ? "bg-th-inset hover:bg-th-inset-hover text-white"
+                : "text-th-text-disabled cursor-default"
+            }`}
+            disabled={!canScrollRight}
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex gap-4 overflow-x-auto no-scrollbar scroll-smooth pb-2"
+      >
+        {section.items.map((item: any) => {
+          let isFavorited: boolean | undefined;
+          let onFavoriteToggle: ((e: React.MouseEvent) => void) | undefined;
+
+          if (sectionType === "ALBUM_LIST" && item.id) {
+            isFavorited = favoriteAlbumIds.has(item.id);
+            onFavoriteToggle = (e) => {
+              e.stopPropagation();
+              if (favoriteAlbumIds.has(item.id)) removeFavoriteAlbum(item.id);
+              else addFavoriteAlbum(item.id, item);
+            };
+          } else if (sectionType === "ARTIST_LIST" && item.id) {
+            isFavorited = followedArtistIds.has(item.id);
+            onFavoriteToggle = (e) => {
+              e.stopPropagation();
+              if (followedArtistIds.has(item.id)) unfollowArtist(item.id);
+              else followArtist(item.id, { id: item.id, name: item.name, picture: item.picture });
+            };
+          } else if (sectionType === "PLAYLIST_LIST" && item.uuid) {
+            isFavorited = favoritePlaylistUuids.has(item.uuid);
+            onFavoriteToggle = (e) => {
+              e.stopPropagation();
+              if (favoritePlaylistUuids.has(item.uuid)) removeFavoritePlaylist(item.uuid);
+              else addFavoritePlaylist(item.uuid, item);
+            };
+          } else if (sectionType === "MIX_LIST") {
+            const mixId = item.mixId || item.id?.toString();
+            if (mixId) {
+              isFavorited = favoriteMixIds.has(mixId);
+              onFavoriteToggle = (e) => {
+                e.stopPropagation();
+                if (favoriteMixIds.has(mixId)) removeFavoriteMix(mixId);
+                else addFavoriteMix(mixId);
+              };
+            }
+          }
+
+          return (
+            <MediaCard
+              key={getItemId(item)}
+              item={item}
+              onClick={() => onCardClick(item, sectionType)}
+              onContextMenu={(e) => onContextMenu(e, item, sectionType)}
+              isArtist={isArtistSection}
+              showPlayButton
+              isFavorited={isFavorited}
+              onFavoriteToggle={onFavoriteToggle}
+              widthClass="w-[180px] flex-shrink-0"
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

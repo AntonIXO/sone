@@ -100,6 +100,13 @@ export function useNavigation() {
     [setCurrentView]
   );
 
+  const navigateToArtistTracks = useCallback(
+    (artistId: number, artistName: string) => {
+      navigate(setCurrentView, { type: "artistTracks", artistId, artistName });
+    },
+    [setCurrentView]
+  );
+
   const navigateToExplore = useCallback(() => {
     navigate(setCurrentView, { type: "explore" });
   }, [setCurrentView]);
@@ -120,6 +127,7 @@ export function useNavigation() {
     navigateToSearch,
     navigateToViewAll,
     navigateToArtist,
+    navigateToArtistTracks,
     navigateToMix,
     navigateToTrackRadio,
     navigateToExplore,

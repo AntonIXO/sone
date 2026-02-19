@@ -2,7 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AlbumDetail,
   ArtistDetail,
+  ArtistPageData,
   Credit,
+  FavoriteMix,
   HomePageCached,
   HomePageResponse,
   Lyrics,
@@ -332,6 +334,85 @@ export async function getArtistBio(artistId: number): Promise<string> {
   TTL.STATIC);
 }
 
+export async function getArtistPage(artistId: number): Promise<ArtistPageData> {
+  return cached(`artist-page:${artistId}`, ["artist"], async () => {
+    const raw = await invoke<any>("get_artist_page", { artistId });
+    return parseArtistPageResponse(raw);
+  }, TTL.MEDIUM);
+}
+
+/** Parse the raw v1 pages/artist response into a structured ArtistPageData */
+function parseArtistPageResponse(json: any): ArtistPageData {
+  const result: ArtistPageData = {
+    artistName: "",
+    topTracks: [],
+    sections: [],
+  };
+
+  const rows = json?.rows;
+  if (!Array.isArray(rows)) return result;
+
+  for (const row of rows) {
+    const modules = row?.modules;
+    if (!Array.isArray(modules)) continue;
+
+    for (const mod of modules) {
+      const type = mod?.type as string;
+      const title = (mod?.title || "") as string;
+
+      // Artist header module — contains name, picture, bio
+      if (type === "ARTIST_HEADER") {
+        const artist = mod?.artist;
+        if (artist) {
+          result.artistName = artist.name || "";
+          result.picture = artist.picture;
+        }
+        const bio = mod?.bio;
+        if (bio) {
+          result.bio = bio.text;
+          result.bioSource = bio.source;
+        }
+        continue;
+      }
+
+      // Extract items from pagedList (v1 format)
+      const items = mod?.pagedList?.items;
+      if (!Array.isArray(items) || items.length === 0) continue;
+
+      // Track list — first one becomes the playable "top tracks"
+      if (type === "TRACK_LIST") {
+        if (result.topTracks.length === 0) {
+          result.topTracks = items;
+        }
+        result.sections.push({ title: title || "Popular tracks", type: "TRACK_LIST", items, apiPath: mod?.showMore?.apiPath });
+        continue;
+      }
+
+      // Determine section type from module type
+      let sectionType = type;
+      if (type === "ALBUM_LIST") sectionType = "ALBUM_LIST";
+      else if (type === "ARTIST_LIST") sectionType = "ARTIST_LIST";
+      else if (type === "PLAYLIST_LIST") sectionType = "PLAYLIST_LIST";
+      else if (type === "MIX_LIST") sectionType = "MIX_LIST";
+      else if (type === "VIDEO_LIST") sectionType = "VIDEO_LIST";
+
+      if (title || items.length > 0) {
+        result.sections.push({ title, type: sectionType, items, apiPath: mod?.showMore?.apiPath });
+      }
+    }
+  }
+
+  return result;
+}
+
+export async function getArtistTopTracksAll(artistId: number): Promise<any[]> {
+  return cached(`artist-top-tracks-all:${artistId}`, ["artist"], async () => {
+    const raw = await invoke<any>("get_artist_top_tracks_all", { artistId });
+    const items = raw?.items || [];
+    return items.map((item: any) => item.data || item);
+  }, TTL.MEDIUM);
+}
+
 // ==================== Playlist / Mix ====================
 
 export async function getPlaylistTracks(
@@ -470,6 +551,12 @@ export async function getFavoriteAlbums(
 ): Promise<AlbumDetail[]> {
   return cached(`fav-albums:${userId}:${limit}`, ["fav-albums"], () =>
     invoke<AlbumDetail[]>("get_favorite_albums", { userId, limit }),
+  TTL.MEDIUM);
+}
+
+export async function getFavoriteMixes(): Promise<FavoriteMix[]> {
+  return cached("fav-mixes", ["fav-mixes"], () =>
+    invoke<FavoriteMix[]>("get_favorite_mixes"),
   TTL.MEDIUM);
 }
 

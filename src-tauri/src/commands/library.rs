@@ -477,8 +477,38 @@ pub async fn remove_favorite_mix(state: State<'_, AppState>, mix_id: String) -> 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn get_favorite_mix_ids(state: State<'_, AppState>) -> Result<Vec<String>, SoneError> {
     log::debug!("[get_favorite_mix_ids]");
-    let client = state.tidal_client.lock().await;
+    let mut client = state.tidal_client.lock().await;
     client.get_favorite_mix_ids().await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_favorite_mixes(state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, SoneError> {
+    log::debug!("[get_favorite_mixes]");
+
+    let cache_key = "fav-mixes";
+    match state.disk_cache.get(cache_key, CacheTier::UserContent).await {
+        CacheResult::Fresh(bytes) | CacheResult::Stale(bytes) => {
+            if let Ok(mixes) = serde_json::from_slice(&bytes) {
+                return Ok(mixes);
+            }
+        }
+        CacheResult::Miss => {}
+    }
+
+    let mut client = state.tidal_client.lock().await;
+    let mixes = match client.get_favorite_mixes().await {
+        Ok(m) => m,
+        Err(e) => {
+            log::error!("[get_favorite_mixes]: failed: {}", e);
+            return Err(e);
+        }
+    };
+    drop(client);
+
+    if let Ok(json) = serde_json::to_vec(&mixes) {
+        state.disk_cache.put(cache_key, &json, CacheTier::UserContent, &["fav-mixes"]).await.ok();
+    }
+    Ok(mixes)
 }
 
 #[tauri::command(rename_all = "camelCase")]

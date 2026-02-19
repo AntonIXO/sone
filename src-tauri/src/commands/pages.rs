@@ -1,4 +1,5 @@
 use serde::Serialize;
+use serde_json::Value;
 use tauri::{Manager, State};
 
 use crate::AppState;
@@ -422,6 +423,128 @@ pub async fn get_artist_bio(
             .ok();
     }
     Ok(bio)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_artist_page(
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    artist_id: u64,
+) -> Result<Value, SoneError> {
+    log::debug!("[get_artist_page]: artist_id={}", artist_id);
+
+    let cache_key = format!("artist-page:{}", artist_id);
+    match state.disk_cache.get(&cache_key, CacheTier::Dynamic).await {
+        CacheResult::Fresh(bytes) => {
+            if let Ok(page) = serde_json::from_slice(&bytes) {
+                return Ok(page);
+            }
+        }
+        CacheResult::Stale(bytes) => {
+            if let Ok(page) = serde_json::from_slice::<Value>(&bytes) {
+                if state.disk_cache.mark_in_flight(&cache_key).await {
+                    if state.disk_cache.should_retry_refresh(&cache_key, 300).await {
+                        state.disk_cache.mark_refresh_attempt(&cache_key).await;
+                        let handle = app_handle.clone();
+                        let key = cache_key.clone();
+                        tokio::spawn(async move {
+                            let st = handle.state::<AppState>();
+                            let result = {
+                                let mut client = st.tidal_client.lock().await;
+                                client.get_artist_page(artist_id).await
+                            };
+                            if let Ok(fresh) = result {
+                                if let Ok(json) = serde_json::to_vec(&fresh) {
+                                    st.disk_cache
+                                        .put(&key, &json, CacheTier::Dynamic, &["artist", &format!("artist:{}", artist_id)])
+                                        .await
+                                        .ok();
+                                }
+                            }
+                            st.disk_cache.clear_in_flight(&key).await;
+                        });
+                    } else {
+                        state.disk_cache.clear_in_flight(&cache_key).await;
+                    }
+                }
+                return Ok(page);
+            }
+        }
+        CacheResult::Miss => {}
+    }
+
+    let mut client = state.tidal_client.lock().await;
+    let page = client.get_artist_page(artist_id).await?;
+    drop(client);
+
+    if let Ok(json) = serde_json::to_vec(&page) {
+        state.disk_cache
+            .put(&cache_key, &json, CacheTier::Dynamic, &["artist", &format!("artist:{}", artist_id)])
+            .await
+            .ok();
+    }
+    Ok(page)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_artist_top_tracks_all(
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    artist_id: u64,
+) -> Result<Value, SoneError> {
+    log::debug!("[get_artist_top_tracks_all]: artist_id={}", artist_id);
+
+    let cache_key = format!("artist-top-tracks-all:{}", artist_id);
+    match state.disk_cache.get(&cache_key, CacheTier::Dynamic).await {
+        CacheResult::Fresh(bytes) => {
+            if let Ok(data) = serde_json::from_slice(&bytes) {
+                return Ok(data);
+            }
+        }
+        CacheResult::Stale(bytes) => {
+            if let Ok(data) = serde_json::from_slice::<Value>(&bytes) {
+                if state.disk_cache.mark_in_flight(&cache_key).await {
+                    if state.disk_cache.should_retry_refresh(&cache_key, 300).await {
+                        state.disk_cache.mark_refresh_attempt(&cache_key).await;
+                        let handle = app_handle.clone();
+                        let key = cache_key.clone();
+                        tokio::spawn(async move {
+                            let st = handle.state::<AppState>();
+                            let result = {
+                                let mut client = st.tidal_client.lock().await;
+                                client.get_artist_top_tracks_all(artist_id).await
+                            };
+                            if let Ok(fresh) = result {
+                                if let Ok(json) = serde_json::to_vec(&fresh) {
+                                    st.disk_cache
+                                        .put(&key, &json, CacheTier::Dynamic, &["artist", &format!("artist:{}", artist_id)])
+                                        .await
+                                        .ok();
+                                }
+                            }
+                            st.disk_cache.clear_in_flight(&key).await;
+                        });
+                    } else {
+                        state.disk_cache.clear_in_flight(&cache_key).await;
+                    }
+                }
+                return Ok(data);
+            }
+        }
+        CacheResult::Miss => {}
+    }
+
+    let mut client = state.tidal_client.lock().await;
+    let data = client.get_artist_top_tracks_all(artist_id).await?;
+    drop(client);
+
+    if let Ok(json) = serde_json::to_vec(&data) {
+        state.disk_cache
+            .put(&cache_key, &json, CacheTier::Dynamic, &["artist", &format!("artist:{}", artist_id)])
+            .await
+            .ok();
+    }
+    Ok(data)
 }
 
 /// Debug command: returns the raw JSON structure of multiple page endpoints
