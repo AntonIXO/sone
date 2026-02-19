@@ -1531,8 +1531,18 @@ impl TidalClient {
 
         log::debug!("[get_favorite_mixes]: body_preview={}", &body[..body.len().min(500)]);
 
-        let items: Vec<serde_json::Value> = serde_json::from_str(&body)
-            .unwrap_or_default();
+        // v2 response is a wrapper object; extract the inner array
+        let items: Vec<serde_json::Value> = if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&body) {
+            arr
+        } else if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&body) {
+            obj.get("items")
+                .or_else(|| obj.get("data"))
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
 
         log::debug!("[get_favorite_mixes]: found {} mixes", items.len());
         Ok(items)
