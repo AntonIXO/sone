@@ -3,7 +3,7 @@ use tauri::{Manager, State};
 use crate::AppState;
 use crate::SoneError;
 use crate::cache::{CacheResult, CacheTier};
-use crate::tidal_api::{PaginatedTracks, TidalAlbumDetail, TidalArtistDetail, TidalPlaylist, TidalTrack};
+use crate::tidal_api::{AllFavoriteIds, PaginatedTracks, TidalAlbumDetail, TidalArtistDetail, TidalPlaylist, TidalTrack};
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn get_user_playlists(
@@ -514,6 +514,13 @@ pub async fn remove_favorite_artist(state: State<'_, AppState>, user_id: u64, ar
     drop(client);
     state.disk_cache.invalidate_tag("fav-artists").await;
     Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_all_favorite_ids(state: State<'_, AppState>, user_id: u64) -> Result<AllFavoriteIds, SoneError> {
+    log::debug!("[get_all_favorite_ids]: user_id={}", user_id);
+    let client = state.tidal_client.lock().await;
+    client.get_all_favorite_ids(user_id).await
 }
 
 #[tauri::command(rename_all = "camelCase")]

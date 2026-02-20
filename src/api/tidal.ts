@@ -674,6 +674,19 @@ export async function getFavoritePlaylists(
   TTL.MEDIUM);
 }
 
+// ==================== Unified favorite IDs (one-shot init) ====================
+
+export interface AllFavoriteIds {
+  tracks: number[];
+  albums: number[];
+  artists: number[];
+  playlists: string[];
+}
+
+export async function getAllFavoriteIds(userId: number): Promise<AllFavoriteIds> {
+  return invoke<AllFavoriteIds>("get_all_favorite_ids", { userId });
+}
+
 // ==================== Auth helpers (never cached) ====================
 
 export async function getSavedCredentials(): Promise<{

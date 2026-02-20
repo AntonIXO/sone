@@ -339,6 +339,7 @@ pub fn run() {
             commands::library::remove_favorite_playlist,
             commands::library::add_tracks_to_playlist,
             commands::library::get_favorite_artist_ids,
+            commands::library::get_all_favorite_ids,
             commands::library::add_favorite_artist,
             commands::library::remove_favorite_artist,
             commands::library::add_favorite_mix,

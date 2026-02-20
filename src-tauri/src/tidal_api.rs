@@ -100,6 +100,15 @@ pub struct PaginatedTracks {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct AllFavoriteIds {
+    pub tracks: Vec<u64>,
+    pub albums: Vec<u64>,
+    pub artists: Vec<u64>,
+    pub playlists: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct PaginatedResponse<T> {
     pub items: Vec<T>,
     pub total_number_of_items: u32,
@@ -1426,6 +1435,44 @@ impl TidalClient {
             .map_err(|e| SoneError::Parse(e.to_string()))?;
 
         Ok(data.items.into_iter().map(|f| f.item.id).collect())
+    }
+
+    pub async fn get_all_favorite_ids(&self, user_id: u64) -> Result<AllFavoriteIds, SoneError> {
+        let tokens = self.tokens.as_ref().ok_or(SoneError::NotAuthenticated)?;
+        let response = self
+            .client
+            .get(format!("{}/users/{}/favorites/ids", TIDAL_API_URL, user_id))
+            .header("Authorization", format!("Bearer {}", tokens.access_token))
+            .query(&[
+                ("countryCode", self.country_code.as_str()),
+                ("locale", "en_US"),
+                ("deviceType", "BROWSER"),
+            ])
+            .send()
+            .await?;
+
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(SoneError::Api { status: status.as_u16(), body });
+        }
+
+        let raw: std::collections::HashMap<String, Vec<String>> =
+            serde_json::from_str(&body).map_err(|e| SoneError::Parse(e.to_string()))?;
+
+        let parse_u64s = |key: &str| -> Vec<u64> {
+            raw.get(key)
+                .map(|v| v.iter().filter_map(|s| s.parse::<u64>().ok()).collect())
+                .unwrap_or_default()
+        };
+
+        Ok(AllFavoriteIds {
+            tracks: parse_u64s("TRACK"),
+            albums: parse_u64s("ALBUM"),
+            artists: parse_u64s("ARTIST"),
+            playlists: raw.get("PLAYLIST").cloned().unwrap_or_default(),
+        })
     }
 
     pub async fn add_favorite_artist(&self, user_id: u64, artist_id: u64) -> Result<(), SoneError> {

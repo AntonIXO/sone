@@ -47,6 +47,7 @@ import {
   savePlaybackQueue,
   loadPlaybackQueue,
   getHomePage,
+  getAllFavoriteIds,
   getFavoriteTracks,
   getFavoriteArtists,
   getFavoriteAlbums,
@@ -183,24 +184,23 @@ export function AppInitializer() {
           }
         }
 
-        // Favorite IDs — all types in parallel
-        Promise.all([
-          invoke<number[]>("get_favorite_track_ids", { userId })
-            .then((ids) => setFavoriteTrackIds(new Set(ids)))
-            .catch((error) => console.error("Failed to load favorite track IDs:", error)),
-          invoke<number[]>("get_favorite_album_ids", { userId })
-            .then((ids) => setFavoriteAlbumIds(new Set(ids)))
-            .catch((error) => console.error("Failed to load favorite album IDs:", error)),
-          invoke<string[]>("get_favorite_playlist_uuids", { userId })
-            .then((uuids) => setFavoritePlaylistUuids(new Set(uuids)))
-            .catch((error) => console.error("Failed to load favorite playlist UUIDs:", error)),
-          invoke<number[]>("get_favorite_artist_ids", { userId })
-            .then((ids) => setFollowedArtistIds(new Set(ids)))
-            .catch((error) => console.error("Failed to load followed artist IDs:", error)),
-          invoke<string[]>("get_favorite_mix_ids")
-            .then((ids) => setFavoriteMixIds(new Set(ids)))
-            .catch((error) => console.error("Failed to load favorite mix IDs:", error)),
-        ]);
+        // Favorite IDs — unified endpoint (tracks/albums/artists/playlists in one call)
+        getAllFavoriteIds(userId)
+          .then((ids) => {
+            setFavoriteTrackIds(new Set(ids.tracks));
+            setFavoriteAlbumIds(new Set(ids.albums));
+            setFollowedArtistIds(new Set(ids.artists));
+            setFavoritePlaylistUuids(new Set(ids.playlists));
+          })
+          .catch((error) => console.error("Failed to load favorite IDs:", error));
+
+        // Mix IDs still separate (v2 endpoint, not in unified response)
+        invoke<string[]>("get_favorite_mix_ids")
+          .then((ids) => setFavoriteMixIds(new Set(ids)))
+          .catch((error) => console.error("Failed to load favorite mix IDs:", error));
+
+        // Preload home page (fire-and-forget)
+        getHomePage().catch(() => {});
       } catch (err) {
         console.error("Failed to load saved auth:", err);
         setIsAuthChecking(false);
@@ -224,7 +224,6 @@ export function AppInitializer() {
     const timer = setTimeout(() => {
       // Preload in parallel (errors are non-fatal)
       Promise.all([
-        getHomePage().catch(() => {}),
         getFavoriteTracks(userId, 0, 50).catch(() => {}),
         getFavoriteArtists(userId, 0, 20).catch(() => {}),
         getFavoriteAlbums(userId, 0, 20).catch(() => {}),
