@@ -135,7 +135,7 @@ impl AudioPlayer {
                             let (u_vol, n_vol) = if bit_perfect {
                                 // Disable dithering and noise shaping so audioconvert
                                 // only does byte-layout conversion (endianness/interleaving)
-                                audioconvert.set_property("dither", 0i32);
+                                audioconvert.set_property_from_str("dithering", "none");
                                 audioconvert.set_property_from_str("noise-shaping", "none");
 
                                 let capsfilter = gst::ElementFactory::make("capsfilter")
