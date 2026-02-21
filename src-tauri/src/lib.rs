@@ -9,7 +9,7 @@ mod tidal_api;
 
 pub use error::SoneError;
 
-use audio::AudioPlayer;
+use audio::{AudioDevice, AudioPlayer};
 use cache::DiskCache;
 use crypto::Crypto;
 use serde::{Deserialize, Serialize};
@@ -59,6 +59,7 @@ pub struct AppState {
     pub exclusive_mode: AtomicBool,
     pub bit_perfect: AtomicBool,
     pub exclusive_device: std::sync::Mutex<Option<String>>,
+    pub cached_audio_devices: std::sync::Mutex<Option<Vec<AudioDevice>>>,
     /// Current track's selected replay gain (dB) stored as f64 bits. NAN = no data.
     /// Album or track gain depending on playback context.
     pub last_replay_gain: AtomicU64,
@@ -142,6 +143,7 @@ impl AppState {
             exclusive_mode: AtomicBool::new(exclusive_mode),
             bit_perfect: AtomicBool::new(bit_perfect),
             exclusive_device: std::sync::Mutex::new(exclusive_device),
+            cached_audio_devices: std::sync::Mutex::new(None),
             last_replay_gain: AtomicU64::new(f64::NAN.to_bits()),
             last_peak_amplitude: AtomicU64::new(f64::NAN.to_bits()),
             #[cfg(target_os = "linux")]
@@ -201,6 +203,17 @@ pub fn run() {
                 if bp {
                     state.audio_player.set_bit_perfect(true).ok();
                 }
+            }
+
+            // Pre-warm audio device cache in background (GStreamer probe is slow)
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    if let Ok(devices) = crate::audio::list_alsa_devices() {
+                        let state = handle.state::<AppState>();
+                        *state.cached_audio_devices.lock().unwrap() = Some(devices);
+                    }
+                });
             }
 
             if let Some(window) = app.get_webview_window("main") {
