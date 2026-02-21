@@ -23,6 +23,7 @@ import {
   volumeAtom,
   streamInfoAtom,
   autoplayAtom,
+  bitPerfectAtom,
 } from "../atoms/playback";
 import { favoriteTrackIdsAtom } from "../atoms/favorites";
 import { usePlaybackActions } from "../hooks/usePlaybackActions";
@@ -407,43 +408,54 @@ const QualityBadge = memo(function QualityBadge() {
 
 const VolumeSlider = memo(function VolumeSlider() {
   const volume = useAtomValue(volumeAtom);
+  const bitPerfect = useAtomValue(bitPerfectAtom);
   const { setVolume } = usePlaybackActions();
 
+  const displayVolume = bitPerfect ? 1 : volume;
+
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (bitPerfect) return;
     setVolume(parseFloat(e.target.value));
   };
 
-  const VolumeIcon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+  const VolumeIcon = displayVolume === 0 ? VolumeX : displayVolume < 0.5 ? Volume1 : Volume2;
 
   return (
-    <div className="flex items-center gap-2 group/vol w-[120px]">
+    <div className={`flex items-center gap-2 group/vol w-[120px] ${bitPerfect ? "opacity-40 cursor-not-allowed" : ""}`}>
       <button
         onClick={() => {
+          if (bitPerfect) return;
           setVolume(volume > 0 ? 0 : 1);
         }}
-        className="text-th-text-secondary hover:text-white transition-colors duration-150 flex-shrink-0"
+        className={`flex-shrink-0 transition-colors duration-150 ${
+          bitPerfect
+            ? "text-th-text-faint cursor-not-allowed"
+            : "text-th-text-secondary hover:text-white"
+        }`}
+        disabled={bitPerfect}
       >
         <VolumeIcon size={16} strokeWidth={2} />
       </button>
-      <div className="flex-1 relative rounded-full cursor-pointer">
+      <div className={`flex-1 relative rounded-full ${bitPerfect ? "cursor-not-allowed" : "cursor-pointer"}`}>
         <input
           type="range"
           min="0"
           max="1"
           step="0.01"
-          value={volume}
+          value={displayVolume}
           onChange={handleVolumeChange}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          disabled={bitPerfect}
+          className={`absolute inset-0 w-full h-full opacity-0 z-10 ${bitPerfect ? "cursor-not-allowed" : "cursor-pointer"}`}
         />
         <div className="relative h-[3px] group-hover/vol:h-[4px] transition-[height] duration-100 rounded-full">
           <div className="absolute inset-0 bg-white/[0.12] rounded-full" />
           <div
             className="absolute h-full bg-white/70 group-hover/vol:bg-th-accent rounded-full transition-colors duration-100"
-            style={{ width: `${volume * 100}%` }}
+            style={{ width: `${displayVolume * 100}%` }}
           />
           <div
             className="absolute top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-white rounded-full shadow-sm opacity-0 group-hover/vol:opacity-100 transition-opacity duration-100"
-            style={{ left: `calc(${volume * 100}% - 5px)` }}
+            style={{ left: `calc(${displayVolume * 100}% - 5px)` }}
           />
         </div>
       </div>
