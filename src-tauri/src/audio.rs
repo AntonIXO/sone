@@ -1168,7 +1168,8 @@ fn build_appsink_pipeline(
 
         (None, None)
     } else {
-        // Exclusive (non-bit-perfect): volume elements in GStreamer, caps locked
+        // Exclusive (non-bit-perfect): volume elements in GStreamer, format+channels locked.
+        // Rate is unconstrained — source's native sample rate passes through (audioresample is passthrough).
         let audioresample = gst::ElementFactory::make("audioresample")
             .build()
             .map_err(|e| format!("Failed to create audioresample: {e}"))?;
@@ -1183,7 +1184,6 @@ fn build_appsink_pipeline(
         let capsfilter = gst::ElementFactory::make("capsfilter")
             .property("caps", gst::Caps::builder("audio/x-raw")
                 .field("format", "S32LE")
-                .field("rate", 48000i32)
                 .field("channels", 2i32)
                 .build())
             .build()
