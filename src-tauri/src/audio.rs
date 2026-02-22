@@ -203,7 +203,7 @@ fn spawn_alsa_writer(
                 }
             }
 
-            fn write_bytes(pcm: &alsa::PCM, data: &[u8], fmt: &PcmFormat, fw: &AtomicU64) -> Result<(), &'static str> {
+            fn write_bytes(pcm: &alsa::PCM, data: &[u8], fmt: &PcmFormat, fw: &AtomicU64, silence_buf: &[u8]) -> Result<(), &'static str> {
                 let frame_size = fmt.channels as usize * fmt.bytes_per_sample as usize;
                 if frame_size == 0 { return Ok(()); }
                 let mut offset = 0;
@@ -223,7 +223,7 @@ fn spawn_alsa_writer(
                                 let kick_frames = (fmt.sample_rate as usize * 50) / 1000;
                                 let kick_bytes = kick_frames * frame_size;
                                 let io = pcm.io_bytes();
-                                let _ = io.writei(&vec![0u8; kick_bytes]);
+                                let _ = io.writei(&silence_buf[..kick_bytes.min(silence_buf.len())]);
                             } else if errno == libc::ENODEV {
                                 return Err("device_disconnected");
                             } else {
@@ -332,7 +332,7 @@ fn spawn_alsa_writer(
                                 }
                             }
                         }
-                        if let Err(kind) = write_bytes(&pcm, &chunk.data, &current_fmt, &frames_written) {
+                        if let Err(kind) = write_bytes(&pcm, &chunk.data, &current_fmt, &frames_written, &silence_buf) {
                             app_handle.emit("audio-error", serde_json::json!({ "kind": kind })).ok();
                             break;
                         }
@@ -398,7 +398,7 @@ fn spawn_alsa_writer(
                                         pcm.drop().ok();
                                         pcm.prepare().ok();
                                     }
-                                    if let Err(kind) = write_bytes(&pcm, &chunk.data, &current_fmt, &frames_written) {
+                                    if let Err(kind) = write_bytes(&pcm, &chunk.data, &current_fmt, &frames_written, &silence_buf) {
                                         app_handle.emit("audio-error", serde_json::json!({ "kind": kind })).ok();
                                         break 'main;
                                     }
@@ -856,7 +856,8 @@ impl AudioPlayer {
                                     .map_err(|e| format!("Failed to stop: {e}"))
                             }
                             Some(PlaybackBackend::DirectAlsa { pipeline, .. }) => {
-                                // Shutdown writer thread — releases ALSA device
+                                // Unblock writer if paused, then shut down
+                                paused.store(false, Ordering::Release);
                                 if let Some(tx) = writer_tx.take() {
                                     tx.send(WriterCommand::Shutdown).ok();
                                 }
@@ -899,6 +900,7 @@ impl AudioPlayer {
                                     .map_err(|e| format!("Seek failed: {e}"))
                             }
                             Some(PlaybackBackend::DirectAlsa { pipeline, .. }) => {
+                                paused.store(false, Ordering::Release);
                                 track_generation += 1;
                                 writer_gen.store(track_generation, Ordering::Release);
                                 if let Some(ref tx) = writer_tx {
@@ -1231,6 +1233,7 @@ pub fn list_alsa_devices() -> Result<Vec<AudioDevice>, String> {
 }
 
 fn list_alsa_devices_inner() -> Result<Vec<AudioDevice>, String> {
+    gst::init().map_err(|e| format!("GStreamer init failed: {e}"))?;
     let monitor = gst::DeviceMonitor::new();
     let caps = gst::Caps::new_empty_simple("audio/x-raw");
     monitor.add_filter(Some("Audio/Sink"), Some(&caps));
