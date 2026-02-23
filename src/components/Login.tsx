@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { getSavedCredentials, parseTokenData } from "../api/tidal";
+import { formatSoneError } from "../lib/errorUtils";
 import {
   Loader2,
   ExternalLink,
@@ -12,6 +13,8 @@ import {
   Smartphone,
   Globe,
   Import,
+  HelpCircle,
+  X,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "./Icon";
@@ -62,6 +65,9 @@ export default function Login() {
   const [responseMasked, setResponseMasked] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false);
 
   // Load saved credentials on mount
   useEffect(() => {
@@ -148,12 +154,12 @@ export default function Login() {
         } catch (err: any) {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
-          setError(`Device auth failed: ${err?.message || err}`);
+          setError(formatSoneError(err));
           setStep("idle");
         }
       }, interval);
     } catch (err: any) {
-      setError(`Failed to start device auth: ${err?.message || err}`);
+      setError(formatSoneError(err));
       setStep("idle");
       setStatus("");
     }
@@ -189,7 +195,7 @@ export default function Login() {
         window.open(params.authorizeUrl, "_blank");
       }
     } catch (err: any) {
-      setError(`Failed to start login: ${err?.message || err}`);
+      setError(formatSoneError(err));
       setStep("idle");
     }
   };
@@ -223,7 +229,7 @@ export default function Login() {
       setStep("idle");
       setStatus("");
     } catch (err: any) {
-      setError(`Authentication failed: ${err?.message || err}`);
+      setError(formatSoneError(err));
       setStep("pkce_waiting");
       setStatus("");
     }
@@ -286,7 +292,7 @@ export default function Login() {
       setStep("idle");
       setStatus("");
     } catch (err: any) {
-      setError(`Session import failed: ${err?.message || err}`);
+      setError(formatSoneError(err));
       setStep("idle");
       setStatus("");
     } finally {
@@ -348,9 +354,16 @@ export default function Login() {
         {/* ==================== Idle ==================== */}
         {step === "idle" && (
           <>
-            <p className="text-th-text-muted mb-6 text-lg">
+            <p className="text-th-text-muted mb-2 text-lg">
               Connect your Tidal account to start streaming
             </p>
+            <button
+              onClick={() => setShowHelp(true)}
+              className="flex items-center gap-1.5 text-[13px] text-th-accent/70 hover:text-th-accent mx-auto mb-6 transition-colors"
+            >
+              <HelpCircle size={14} />
+              What are Client ID and Client Secret?
+            </button>
 
             {/* Credentials */}
             <div
@@ -837,6 +850,102 @@ export default function Login() {
           </div>
         )}
       </div>
+
+      {/* ==================== Help Modal ==================== */}
+      {showHelp && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowHelp(false)}
+        >
+          <div
+            className="relative bg-th-surface border border-th-border-subtle rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-6 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowHelp(false)}
+              className="absolute top-4 right-4 text-th-text-faint hover:text-white transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <h2 className="text-[16px] font-bold text-white mb-4">
+              What are Client ID and Client Secret?
+            </h2>
+
+            <div className="space-y-4 text-[13px] text-th-text-muted leading-relaxed">
+              <p>
+                They are OAuth application credentials used to connect to
+                Tidal's API. Official Tidal apps (Android, iOS, desktop) have
+                these built in. Since SONE is an unofficial client, it does not
+                ship with any credentials — you provide your own.
+              </p>
+
+              <p>
+                SONE requires credentials from a{" "}
+                <span className="text-white font-medium">
+                  native Tidal application
+                </span>{" "}
+                (such as the Android or desktop client). Credentials from the
+                Tidal Developer Portal (<span className="text-th-text-faint font-mono text-[12px]">developer.tidal.com</span>){" "}
+                <span className="text-red-400 font-medium">will not work</span>{" "}
+                — those are for Tidal's public catalog API, which is a
+                different system that does not support authentication or
+                streaming.
+              </p>
+
+              <p>
+                SONE does not provide or endorse any specific method for
+                obtaining credentials. You may find guidance by searching
+                online.
+              </p>
+
+              <div>
+                <p className="text-white font-medium mb-2">Do I need both?</p>
+                <p className="mb-2">No. There are two login methods:</p>
+                <ul className="list-disc list-inside space-y-1.5 ml-1">
+                  <li>
+                    <span className="text-white font-medium">Device Code</span>{" "}
+                    — works with Client ID alone (CD-quality lossless,
+                    16-bit/44.1kHz). Adding Client Secret unlocks Hi-Res up to
+                    24-bit/192kHz.
+                  </li>
+                  <li>
+                    <span className="text-white font-medium">PKCE</span> —
+                    requires both Client ID and Client Secret. Supports Hi-Res
+                    up to 24-bit/192kHz.
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <p className="text-white font-medium mb-2">
+                  Are my credentials safe?
+                </p>
+                <p>
+                  Client ID and Client Secret identify an application, not your
+                  personal account. Your Tidal login is handled separately
+                  through Tidal's standard OAuth 2.0 flow — the same mechanism
+                  used by all official Tidal applications. Credentials are
+                  stored locally (encrypted at rest with AES-256-GCM) and only
+                  sent to Tidal's authentication servers.
+                </p>
+              </div>
+
+              <hr className="border-th-border-subtle" />
+
+              <p className="text-[11px] text-th-text-disabled leading-relaxed">
+                SONE is an independent, community-driven project. It is not
+                affiliated with, endorsed by, or connected to Tidal in any way.
+                All content is streamed directly from Tidal's service and
+                requires a valid paid subscription. SONE is a streaming client
+                only — it does not support offline downloads, and does not
+                redistribute or circumvent protection of any content. All
+                trademarks belong to their respective owners.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
