@@ -15,7 +15,7 @@ import {
   Radio,
   Globe,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAtom } from "jotai";
 import { useAuth } from "../hooks/useAuth";
@@ -29,6 +29,7 @@ import {
 import { useToast } from "../contexts/ToastContext";
 import ThemeEditor from "./ThemeEditor";
 import ScrobbleModal from "./ScrobbleModal";
+import { formatSoneError } from "../lib/errorUtils";
 
 const SHORTCUTS = [
   { keys: "Space", desc: "Play / Pause" },
@@ -69,6 +70,19 @@ export default function UserMenu() {
   const [proxyUrl, setProxyUrl] = useState("");
   const [proxyEditing, setProxyEditing] = useState(false);
   const [proxyDraft, setProxyDraft] = useState("");
+
+  const saveProxy = useCallback(() => {
+    const url = proxyDraft.trim() || null;
+    invoke("set_proxy_url", { proxyUrl: url })
+      .then(() => {
+        setProxyUrl(proxyDraft.trim());
+        setProxyEditing(false);
+        showToast(url ? "Proxy saved and applied" : "Proxy cleared");
+      })
+      .catch((err: unknown) => {
+        showToast(`Invalid proxy URL: ${formatSoneError(err)}`);
+      });
+  }, [proxyDraft, showToast]);
 
   // Load preferences (exclusive/bitPerfect/device are from Jotai atoms, hydrated by AppInitializer)
   useEffect(() => {
@@ -402,21 +416,11 @@ export default function UserMenu() {
                   value={proxyDraft}
                   onChange={(e) => setProxyDraft(e.target.value)}
                   placeholder="socks5://127.0.0.1:1080"
+                  aria-label="Proxy URL"
                   className="flex-1 px-2 py-1 text-[12px] bg-th-inset border border-th-border-subtle rounded-md text-white placeholder-th-text-muted focus:outline-none focus:border-th-accent/60"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      const url = proxyDraft.trim() || null;
-                      invoke("set_proxy_url", { proxyUrl: url })
-                        .then(() => {
-                          setProxyUrl(proxyDraft.trim());
-                          setProxyEditing(false);
-                          showToast(url ? "Proxy saved and applied" : "Proxy cleared");
-                        })
-                        .catch((err: unknown) => {
-                          showToast(
-                            `Invalid proxy URL: ${err instanceof Error ? err.message : String(err)}`,
-                          );
-                        });
+                      saveProxy();
                     } else if (e.key === "Escape") {
                       setProxyEditing(false);
                     }
@@ -424,20 +428,7 @@ export default function UserMenu() {
                   autoFocus
                 />
                 <button
-                  onClick={() => {
-                    const url = proxyDraft.trim() || null;
-                    invoke("set_proxy_url", { proxyUrl: url })
-                      .then(() => {
-                        setProxyUrl(proxyDraft.trim());
-                        setProxyEditing(false);
-                        showToast(url ? "Proxy saved and applied" : "Proxy cleared");
-                      })
-                      .catch((err: unknown) => {
-                        showToast(
-                          `Invalid proxy URL: ${err instanceof Error ? err.message : String(err)}`,
-                        );
-                      });
-                  }}
+                  onClick={saveProxy}
                   className="px-2 py-1 text-[12px] bg-th-accent/20 hover:bg-th-accent/30 text-th-accent rounded-md transition-colors"
                 >
                   Save

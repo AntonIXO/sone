@@ -233,7 +233,7 @@ pub fn get_proxy_url(state: State<'_, AppState>) -> Option<String> {
     state.load_settings().and_then(|s| s.proxy_url)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "camelCase")]
 pub async fn set_proxy_url(
     state: State<'_, AppState>,
     proxy_url: Option<String>,
@@ -256,6 +256,9 @@ pub async fn set_proxy_url(
     let mut settings = state.load_settings().unwrap_or_default();
     settings.proxy_url = proxy_url.filter(|u| !u.is_empty());
     state.save_settings(&settings)?;
-    log::info!("[set_proxy_url]: proxy set to {:?}", settings.proxy_url);
+    log::info!(
+        "[set_proxy_url]: proxy {}",
+        if settings.proxy_url.is_some() { "enabled" } else { "disabled" }
+    );
     Ok(())
 }

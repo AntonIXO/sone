@@ -13,14 +13,22 @@ pub fn build_http_client(proxy_url: Option<&str>) -> Client {
         match reqwest::Proxy::all(url) {
             Ok(proxy) => {
                 builder = builder.proxy(proxy);
-                log::info!("[build_http_client]: using proxy {url}");
+                log::info!("[build_http_client]: proxy configured");
             }
             Err(e) => {
-                log::warn!("[build_http_client]: invalid proxy URL '{url}': {e}");
+                log::warn!("[build_http_client]: invalid proxy URL: {e}");
             }
         }
     }
-    builder.build().unwrap_or_else(|_| Client::new())
+    match builder.build() {
+        Ok(client) => client,
+        Err(e) => {
+            log::error!(
+                "[build_http_client]: failed to build HTTP client with configured settings: {e}; falling back to default client without timeout/proxy"
+            );
+            Client::new()
+        }
+    }
 }
 
 const TIDAL_AUTH_URL: &str = "https://auth.tidal.com/v1/oauth2";
